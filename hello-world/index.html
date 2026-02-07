@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello World </title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #ff8c00 0%, #ffd700 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #ffffff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 60px 80px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            position: absolute;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3.5em;
+            margin-bottom: 30px;
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            letter-spacing: 2px;
+        }
+
+        p {
+            font-size: 1.8em;
+            font-weight: 300;
+            line-height: 1.6;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="dvd">
+        <h1>Maxim Bolouvi</h1>
+        <p>Hello, World! I'm ready to vibe code.</p>
+    </div>
+
+    <script>
+        const dvd = document.getElementById('dvd');
+        let x = 100;
+        let y = 100;
+        let dx = 2;
+        let dy = 2;
+
+        function animate() {
+            const rect = dvd.getBoundingClientRect();
+            const maxX = window.innerWidth - rect.width;
+            const maxY = window.innerHeight - rect.height;
+
+            x += dx;
+            y += dy;
+
+            if (x <= 0 || x >= maxX) {
+                dx = -dx;
+                changeColor();
+            }
+            if (y <= 0 || y >= maxY) {
+                dy = -dy;
+                changeColor();
+            }
+
+            x = Math.max(0, Math.min(x, maxX));
+            y = Math.max(0, Math.min(y, maxY));
+
+            dvd.style.left = x + 'px';
+            dvd.style.top = y + 'px';
+
+            requestAnimationFrame(animate);
+        }
+
+        function changeColor() {
+            const colors = [
+                'linear-gradient(135deg, #ff8c00 0%, #ffd700 100%)',
+                'linear-gradient(135deg, #ff6600 0%, #ffcc00 100%)',
+                'linear-gradient(135deg, #ff9933 0%, #ffe066 100%)',
+                'linear-gradient(135deg, #cc5500 0%, #ffaa00 100%)',
+                'linear-gradient(135deg, #ff7700 0%, #ffdd33 100%)'
+            ];
+            document.body.style.background = colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        animate();
+    </script>
+</body>
+</html>

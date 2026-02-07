@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boids Mini-Lab</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    header {
+      text-align: center;
+      padding: 20px;
+      background: #16213e;
+      border-bottom: 2px solid #00d4ff;
+    }
+
+    header h1 {
+      color: #00d4ff;
+      font-size: 2rem;
+      margin-bottom: 5px;
+    }
+
+    header p {
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .canvas-container {
+      flex: 1;
+      min-width: 600px;
+    }
+
+    #canvas {
+      background: #0f0f1e;
+      border: 2px solid #00d4ff;
+      border-radius: 8px;
+      display: block;
+      width: 100%;
+      max-width: 800px;
+    }
+
+    .control-panel {
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .panel {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 15px;
+      border: 1px solid #2a3a5e;
+    }
+
+    .panel h3 {
+      color: #00d4ff;
+      font-size: 1rem;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a3a5e;
+    }
+
+    .presets {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      flex: 1;
+      min-width: 90px;
+      padding: 10px 15px;
+      background: #2a3a5e;
+      border: 1px solid #00d4ff;
+      color: #00d4ff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover {
+      background: #00d4ff;
+      color: #0f0f1e;
+    }
+
+    .preset-btn:focus {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+
+    .slider-group {
+      margin-bottom: 15px;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .slider-label span {
+      font-size: 0.9rem;
+    }
+
+    .slider-value {
+      color: #00d4ff;
+      font-weight: bold;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      cursor: help;
+      margin-left: 5px;
+      width: 16px;
+      height: 16px;
+      background: #2a3a5e;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 16px;
+      font-size: 0.7rem;
+      color: #00d4ff;
+    }
+
+    .tooltip:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 50%;
+      bottom: 100%;
+      transform: translateX(-50%);
+      background: #0f0f1e;
+      color: #e0e0e0;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      width: 200px;
+      z-index: 100;
+      border: 1px solid #00d4ff;
+      margin-bottom: 5px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      background: #2a3a5e;
+      border-radius: 3px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #00d4ff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #00d4ff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+
+    input[type="range"]:focus {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .control-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 10px 15px;
+      background: #2a3a5e;
+      border: 1px solid #00d4ff;
+      color: #e0e0e0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    .control-btn:hover {
+      background: #3a4a6e;
+    }
+
+    .control-btn:focus {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+
+    .control-btn.active {
+      background: #00d4ff;
+      color: #0f0f1e;
+    }
+
+    .boundary-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .boundary-toggle span {
+      font-size: 0.9rem;
+    }
+
+    .toggle-btn {
+      padding: 8px 16px;
+      background: #2a3a5e;
+      border: 1px solid #00d4ff;
+      color: #e0e0e0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .toggle-btn.active {
+      background: #00d4ff;
+      color: #0f0f1e;
+    }
+
+    .metrics-bar {
+      background: #16213e;
+      padding: 15px 20px;
+      border-top: 2px solid #00d4ff;
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+
+    .metric {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .metric-label {
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .metric-value {
+      color: #00d4ff;
+      font-weight: bold;
+      font-size: 1rem;
+    }
+
+    @media (max-width: 900px) {
+      .container {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .canvas-container {
+        min-width: auto;
+        width: 100%;
+      }
+
+      .control-panel {
+        width: 100%;
+        max-width: 600px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Boids Mini-Lab</h1>
+    <p>Explore emergent flocking behavior through simple local rules</p>
+  </header>
+
+  <div class="container">
+    <div class="canvas-container">
+      <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+
+    <div class="control-panel">
+      <div class="panel">
+        <h3>Presets</h3>
+        <div class="presets">
+          <button class="preset-btn" id="preset-schooling">Schooling</button>
+          <button class="preset-btn" id="preset-chaotic">Chaotic Swarm</button>
+          <button class="preset-btn" id="preset-cluster">Tight Cluster</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Parameters</h3>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Separation <span class="tooltip" data-tip="Avoid crowding neighbors - higher values push boids apart">?</span></span>
+            <span class="slider-value" id="separation-value">1.5</span>
+          </div>
+          <input type="range" id="separation" min="0" max="3" step="0.1" value="1.5">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Alignment <span class="tooltip" data-tip="Match direction of nearby boids - creates smooth coordinated motion">?</span></span>
+            <span class="slider-value" id="alignment-value">1.0</span>
+          </div>
+          <input type="range" id="alignment" min="0" max="3" step="0.1" value="1.0">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Cohesion <span class="tooltip" data-tip="Steer toward center of neighbors - pulls the flock together">?</span></span>
+            <span class="slider-value" id="cohesion-value">1.0</span>
+          </div>
+          <input type="range" id="cohesion" min="0" max="3" step="0.1" value="1.0">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Neighbor Radius <span class="tooltip" data-tip="How far boids can 'see' - affects information spread across flock">?</span></span>
+            <span class="slider-value" id="radius-value">50</span>
+          </div>
+          <input type="range" id="radius" min="20" max="150" step="5" value="50">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Max Speed <span class="tooltip" data-tip="Maximum velocity - higher values create faster, more energetic flocks">?</span></span>
+            <span class="slider-value" id="speed-value">4.0</span>
+          </div>
+          <input type="range" id="speed" min="1" max="8" step="0.5" value="4">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Simulation Controls</h3>
+        <div class="controls-row">
+          <button class="control-btn" id="reset-btn">Reset</button>
+          <button class="control-btn" id="pause-btn">Pause</button>
+          <button class="control-btn" id="sound-btn">Sound: OFF</button>
+        </div>
+        <div class="boundary-toggle">
+          <span>Boundary:</span>
+          <button class="toggle-btn active" id="wrap-btn">Wrap</button>
+          <button class="toggle-btn" id="bounce-btn">Bounce</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Boid Count</h3>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Number of Boids</span>
+            <span class="slider-value" id="count-value">50</span>
+          </div>
+          <input type="range" id="boid-count" min="10" max="100" step="5" value="50">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="metrics-bar">
+    <div class="metric">
+      <span class="metric-label">FPS:</span>
+      <span class="metric-value" id="fps">60</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Boids:</span>
+      <span class="metric-value" id="boid-count-display">50</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Avg Speed:</span>
+      <span class="metric-value" id="avg-speed">0.0</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Avg Neighbors:</span>
+      <span class="metric-value" id="avg-neighbors">0.0</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Kills:</span>
+      <span class="metric-value" id="collisions">0</span>
+    </div>
+  </div>
+
+  <script>
+    // Vector2D class for math operations
+    class Vector2D {
+      constructor(x = 0, y = 0) {
+        this.x = x;
+        this.y = y;
+      }
+
+      static subtract(v1, v2) {
+        return new Vector2D(v1.x - v2.x, v1.y - v2.y);
+      }
+
+      static add(v1, v2) {
+        return new Vector2D(v1.x + v2.x, v1.y + v2.y);
+      }
+
+      add(v) {
+        this.x += v.x;
+        this.y += v.y;
+        return this;
+      }
+
+      subtract(v) {
+        this.x -= v.x;
+        this.y -= v.y;
+        return this;
+      }
+
+      multiply(n) {
+        this.x *= n;
+        this.y *= n;
+        return this;
+      }
+
+      divide(n) {
+        if (n !== 0) {
+          this.x /= n;
+          this.y /= n;
+        }
+        return this;
+      }
+
+      magnitude() {
+        return Math.sqrt(this.x * this.x + this.y * this.y);
+      }
+
+      normalize() {
+        const mag = this.magnitude();
+        if (mag > 0) {
+          this.divide(mag);
+        }
+        return this;
+      }
+
+      limit(max) {
+        if (this.magnitude() > max) {
+          this.normalize();
+          this.multiply(max);
+        }
+        return this;
+      }
+
+      distance(v) {
+        const dx = this.x - v.x;
+        const dy = this.y - v.y;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+
+      angle() {
+        return Math.atan2(this.y, this.x);
+      }
+
+      copy() {
+        return new Vector2D(this.x, this.y);
+      }
+    }
+
+    // Boid class
+    class Boid {
+      constructor(x, y, config) {
+        this.position = new Vector2D(x, y);
+        this.velocity = new Vector2D(
+          (Math.random() - 0.5) * 2,
+          (Math.random() - 0.5) * 2
+        );
+        this.velocity.normalize().multiply(config.maxSpeed * Math.random());
+        this.acceleration = new Vector2D(0, 0);
+        this.maxSpeed = config.maxSpeed;
+        this.maxForce = 0.2;
+        this.neighborCount = 0;
+        this.hitTimer = 0;
+        this.collisionRadius = 10;
+      }
+
+      getNeighbors(boids, radius) {
+        const neighbors = [];
+        for (let other of boids) {
+          if (other !== this) {
+            const d = this.position.distance(other.position);
+            if (d < radius) {
+              neighbors.push(other);
+            }
+          }
+        }
+        this.neighborCount = neighbors.length;
+        return neighbors;
+      }
+
+      separate(neighbors, desiredSeparation = 25) {
+        const steer = new Vector2D(0, 0);
+        let count = 0;
+
+        for (let other of neighbors) {
+          const d = this.position.distance(other.position);
+          if (d > 0 && d < desiredSeparation) {
+            const diff = Vector2D.subtract(this.position, other.position);
+            diff.normalize();
+            diff.divide(d);
+            steer.add(diff);
+            count++;
+          }
+        }
+
+        if (count > 0) {
+          steer.divide(count);
+          steer.normalize();
+          steer.multiply(this.maxSpeed);
+          steer.subtract(this.velocity);
+          steer.limit(this.maxForce);
+        }
+
+        return steer;
+      }
+
+      align(neighbors) {
+        const sum = new Vector2D(0, 0);
+        let count = 0;
+
+        for (let other of neighbors) {
+          sum.add(other.velocity);
+          count++;
+        }
+
+        if (count > 0) {
+          sum.divide(count);
+          sum.normalize();
+          sum.multiply(this.maxSpeed);
+
+          const steer = Vector2D.subtract(sum, this.velocity);
+          steer.limit(this.maxForce);
+          return steer;
+        }
+
+        return new Vector2D(0, 0);
+      }
+
+      cohere(neighbors) {
+        const sum = new Vector2D(0, 0);
+        let count = 0;
+
+        for (let other of neighbors) {
+          sum.add(other.position);
+          count++;
+        }
+
+        if (count > 0) {
+          sum.divide(count);
+          return this.seek(sum);
+        }
+
+        return new Vector2D(0, 0);
+      }
+
+      seek(target) {
+        const desired = Vector2D.subtract(target, this.position);
+        desired.normalize();
+        desired.multiply(this.maxSpeed);
+
+        const steer = Vector2D.subtract(desired, this.velocity);
+        steer.limit(this.maxForce);
+        return steer;
+      }
+
+      applyForce(force) {
+        this.acceleration.add(force);
+      }
+
+      update(config, allBoids) {
+        this.maxSpeed = config.maxSpeed;
+
+        const neighbors = this.getNeighbors(allBoids, config.neighborRadius);
+
+        const separation = this.separate(neighbors);
+        separation.multiply(config.separationWeight);
+
+        const alignment = this.align(neighbors);
+        alignment.multiply(config.alignmentWeight);
+
+        const cohesion = this.cohere(neighbors);
+        cohesion.multiply(config.cohesionWeight);
+
+        this.applyForce(separation);
+        this.applyForce(alignment);
+        this.applyForce(cohesion);
+
+        this.velocity.add(this.acceleration);
+        this.velocity.limit(this.maxSpeed);
+        this.position.add(this.velocity);
+        this.acceleration.multiply(0);
+      }
+
+      edges(width, height, mode) {
+        if (mode === 'wrap') {
+          if (this.position.x > width) this.position.x = 0;
+          if (this.position.x < 0) this.position.x = width;
+          if (this.position.y > height) this.position.y = 0;
+          if (this.position.y < 0) this.position.y = height;
+        } else {
+          if (this.position.x > width - 10) {
+            this.position.x = width - 10;
+            this.velocity.x *= -1;
+          }
+          if (this.position.x < 10) {
+            this.position.x = 10;
+            this.velocity.x *= -1;
+          }
+          if (this.position.y > height - 10) {
+            this.position.y = height - 10;
+            this.velocity.y *= -1;
+          }
+          if (this.position.y < 10) {
+            this.position.y = 10;
+            this.velocity.y *= -1;
+          }
+        }
+      }
+
+      render(ctx) {
+        const angle = this.velocity.angle();
+        const size = 8;
+
+        ctx.save();
+        ctx.translate(this.position.x, this.position.y);
+        ctx.rotate(angle);
+
+        // Flash orange on hit, otherwise cyan
+        const isHit = this.hitTimer > 0;
+        const color = isHit ? '#ff6b35' : '#00d4ff';
+
+        // Draw boid as triangle with glow
+        ctx.shadowColor = color;
+        ctx.shadowBlur = isHit ? 20 : 10;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(size, 0);
+        ctx.lineTo(-size / 2, size / 2);
+        ctx.lineTo(-size / 2, -size / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+
+        // Decay hit timer
+        if (this.hitTimer > 0) this.hitTimer--;
+      }
+    }
+
+    // Blood particle class for death effects
+    class BloodParticle {
+      constructor(x, y, vx, vy) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.life = 1.0;
+        this.decay = 0.02 + Math.random() * 0.02;
+        this.size = 2 + Math.random() * 4;
+        this.gravity = 0.1;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+        this.vx *= 0.98;
+        this.life -= this.decay;
+        this.size *= 0.98;
+      }
+
+      render(ctx) {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = `hsl(${355 + Math.random() * 10}, 80%, ${30 + Math.random() * 20}%)`;
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 5;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      isDead() {
+        return this.life <= 0;
+      }
+    }
+
+    // Simulation class
+    class Simulation {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.boids = [];
+        this.particles = [];
+        this.running = true;
+        this.frameCount = 0;
+        this.lastTime = performance.now();
+        this.fpsHistory = [];
+
+        this.config = {
+          separationWeight: 1.5,
+          alignmentWeight: 1.0,
+          cohesionWeight: 1.0,
+          neighborRadius: 50,
+          maxSpeed: 4,
+          boundaryMode: 'wrap',
+          boidCount: 50
+        };
+        this.collisionCount = 0;
+
+        // Web Audio API for performant sound
+        this.audioContext = null;
+        this.audioBuffer = null;
+        this.soundEnabled = false;
+        this.soundVolume = 0.3;
+      }
+
+      async enableSound() {
+        if (this.audioContext) {
+          this.soundEnabled = true;
+          return;
+        }
+
+        try {
+          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const response = await fetch('Hit Marker.mp3');
+          const arrayBuffer = await response.arrayBuffer();
+          this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+          this.soundEnabled = true;
+        } catch (e) {
+          console.error('Failed to load sound:', e);
+        }
+      }
+
+      playHitSound() {
+        if (!this.soundEnabled || !this.audioBuffer || !this.audioContext) return;
+
+        const source = this.audioContext.createBufferSource();
+        const gainNode = this.audioContext.createGain();
+
+        source.buffer = this.audioBuffer;
+        gainNode.gain.value = this.soundVolume;
+
+        source.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        source.start(0);
+      }
+
+      spawnBlood(x, y, killerVx, killerVy) {
+        const particleCount = 12 + Math.floor(Math.random() * 8);
+        for (let i = 0; i < particleCount; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 1 + Math.random() * 4;
+          const vx = Math.cos(angle) * speed + killerVx * 0.3;
+          const vy = Math.sin(angle) * speed + killerVy * 0.3;
+          this.particles.push(new BloodParticle(x, y, vx, vy));
+        }
+      }
+
+      init(count) {
+        this.boids = [];
+        for (let i = 0; i < count; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          this.boids.push(new Boid(x, y, this.config));
+        }
+      }
+
+      update() {
+        for (let boid of this.boids) {
+          boid.update(this.config, this.boids);
+          boid.edges(this.canvas.width, this.canvas.height, this.config.boundaryMode);
+        }
+
+        // Collision detection - check pairs of boids (faster one kills slower one)
+        const toRemove = [];
+        const removed = new Set();
+        for (let i = 0; i < this.boids.length; i++) {
+          if (removed.has(i)) continue;
+          for (let j = i + 1; j < this.boids.length; j++) {
+            if (removed.has(j)) continue;
+            const boidA = this.boids[i];
+            const boidB = this.boids[j];
+            const dist = boidA.position.distance(boidB.position);
+            const minDist = boidA.collisionRadius + boidB.collisionRadius;
+
+            if (dist < minDist && dist > 0) {
+              // Collision! Faster boid survives, slower one dies
+              const speedA = boidA.velocity.magnitude();
+              const speedB = boidB.velocity.magnitude();
+
+              let victim, killer;
+              if (speedA >= speedB) {
+                victim = boidB;
+                killer = boidA;
+                removed.add(j);
+                toRemove.push({ idx: j, victim, killer });
+              } else {
+                victim = boidA;
+                killer = boidB;
+                removed.add(i);
+                toRemove.push({ idx: i, victim, killer });
+              }
+
+              // Spawn blood at collision point
+              this.spawnBlood(
+                victim.position.x,
+                victim.position.y,
+                killer.velocity.x,
+                killer.velocity.y
+              );
+
+              // Play hit sound
+              this.playHitSound();
+
+              killer.hitTimer = 20;
+              this.collisionCount++;
+            }
+          }
+        }
+
+        // Update particles
+        for (let p of this.particles) {
+          p.update();
+        }
+        this.particles = this.particles.filter(p => !p.isDead());
+
+        // Remove dead boids and spawn new ones to keep population constant
+        toRemove.sort((a, b) => b.idx - a.idx);
+        for (const { idx } of toRemove) {
+          this.boids.splice(idx, 1);
+          // Spawn a new boid at random position
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          this.boids.push(new Boid(x, y, this.config));
+        }
+      }
+
+      render() {
+        this.ctx.fillStyle = '#0f0f1e';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw blood particles first (behind boids)
+        for (let p of this.particles) {
+          p.render(this.ctx);
+        }
+
+        // Draw boids
+        for (let boid of this.boids) {
+          boid.render(this.ctx);
+        }
+      }
+
+      reset() {
+        this.init(this.config.boidCount);
+        this.particles = [];
+        this.frameCount = 0;
+        this.collisionCount = 0;
+      }
+
+      pause() {
+        this.running = false;
+      }
+
+      resume() {
+        this.running = true;
+      }
+
+      getAverageSpeed() {
+        if (this.boids.length === 0) return 0;
+        let total = 0;
+        for (let boid of this.boids) {
+          total += boid.velocity.magnitude();
+        }
+        return total / this.boids.length;
+      }
+
+      getAverageNeighborCount() {
+        if (this.boids.length === 0) return 0;
+        let total = 0;
+        for (let boid of this.boids) {
+          total += boid.neighborCount;
+        }
+        return total / this.boids.length;
+      }
+
+      calculateFPS() {
+        const now = performance.now();
+        const delta = now - this.lastTime;
+        this.lastTime = now;
+        const fps = 1000 / delta;
+
+        this.fpsHistory.push(fps);
+        if (this.fpsHistory.length > 60) {
+          this.fpsHistory.shift();
+        }
+
+        return this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+      }
+
+      setBoidCount(count) {
+        const diff = count - this.boids.length;
+        if (diff > 0) {
+          for (let i = 0; i < diff; i++) {
+            const x = Math.random() * this.canvas.width;
+            const y = Math.random() * this.canvas.height;
+            this.boids.push(new Boid(x, y, this.config));
+          }
+        } else if (diff < 0) {
+          this.boids.splice(count);
+        }
+        this.config.boidCount = count;
+      }
+    }
+
+    // Initialize
+    const canvas = document.getElementById('canvas');
+    const sim = new Simulation(canvas);
+    sim.init(50);
+
+    // UI Elements
+    const separationSlider = document.getElementById('separation');
+    const alignmentSlider = document.getElementById('alignment');
+    const cohesionSlider = document.getElementById('cohesion');
+    const radiusSlider = document.getElementById('radius');
+    const speedSlider = document.getElementById('speed');
+    const boidCountSlider = document.getElementById('boid-count');
+
+    const separationValue = document.getElementById('separation-value');
+    const alignmentValue = document.getElementById('alignment-value');
+    const cohesionValue = document.getElementById('cohesion-value');
+    const radiusValue = document.getElementById('radius-value');
+    const speedValue = document.getElementById('speed-value');
+    const countValue = document.getElementById('count-value');
+
+    const fpsDisplay = document.getElementById('fps');
+    const boidCountDisplay = document.getElementById('boid-count-display');
+    const avgSpeedDisplay = document.getElementById('avg-speed');
+    const avgNeighborsDisplay = document.getElementById('avg-neighbors');
+    const collisionsDisplay = document.getElementById('collisions');
+
+    const pauseBtn = document.getElementById('pause-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const wrapBtn = document.getElementById('wrap-btn');
+    const bounceBtn = document.getElementById('bounce-btn');
+    const soundBtn = document.getElementById('sound-btn');
+
+    // Slider event listeners
+    separationSlider.addEventListener('input', (e) => {
+      sim.config.separationWeight = parseFloat(e.target.value);
+      separationValue.textContent = e.target.value;
+    });
+
+    alignmentSlider.addEventListener('input', (e) => {
+      sim.config.alignmentWeight = parseFloat(e.target.value);
+      alignmentValue.textContent = e.target.value;
+    });
+
+    cohesionSlider.addEventListener('input', (e) => {
+      sim.config.cohesionWeight = parseFloat(e.target.value);
+      cohesionValue.textContent = e.target.value;
+    });
+
+    radiusSlider.addEventListener('input', (e) => {
+      sim.config.neighborRadius = parseFloat(e.target.value);
+      radiusValue.textContent = e.target.value;
+    });
+
+    speedSlider.addEventListener('input', (e) => {
+      sim.config.maxSpeed = parseFloat(e.target.value);
+      speedValue.textContent = e.target.value;
+    });
+
+    boidCountSlider.addEventListener('input', (e) => {
+      const count = parseInt(e.target.value);
+      countValue.textContent = count;
+      sim.setBoidCount(count);
+    });
+
+    // Preset buttons
+    document.getElementById('preset-schooling').addEventListener('click', () => {
+      sim.config.separationWeight = 1.2;
+      sim.config.alignmentWeight = 2.0;
+      sim.config.cohesionWeight = 1.0;
+      sim.config.neighborRadius = 60;
+      sim.config.maxSpeed = 3.5;
+
+      separationSlider.value = 1.2;
+      alignmentSlider.value = 2.0;
+      cohesionSlider.value = 1.0;
+      radiusSlider.value = 60;
+      speedSlider.value = 3.5;
+
+      separationValue.textContent = '1.2';
+      alignmentValue.textContent = '2.0';
+      cohesionValue.textContent = '1.0';
+      radiusValue.textContent = '60';
+      speedValue.textContent = '3.5';
+    });
+
+    document.getElementById('preset-chaotic').addEventListener('click', () => {
+      sim.config.separationWeight = 0.5;
+      sim.config.alignmentWeight = 0.3;
+      sim.config.cohesionWeight = 0.5;
+      sim.config.neighborRadius = 30;
+      sim.config.maxSpeed = 6.0;
+
+      separationSlider.value = 0.5;
+      alignmentSlider.value = 0.3;
+      cohesionSlider.value = 0.5;
+      radiusSlider.value = 30;
+      speedSlider.value = 6.0;
+
+      separationValue.textContent = '0.5';
+      alignmentValue.textContent = '0.3';
+      cohesionValue.textContent = '0.5';
+      radiusValue.textContent = '30';
+      speedValue.textContent = '6.0';
+    });
+
+    document.getElementById('preset-cluster').addEventListener('click', () => {
+      sim.config.separationWeight = 0.8;
+      sim.config.alignmentWeight = 1.0;
+      sim.config.cohesionWeight = 2.5;
+      sim.config.neighborRadius = 80;
+      sim.config.maxSpeed = 2.5;
+
+      separationSlider.value = 0.8;
+      alignmentSlider.value = 1.0;
+      cohesionSlider.value = 2.5;
+      radiusSlider.value = 80;
+      speedSlider.value = 2.5;
+
+      separationValue.textContent = '0.8';
+      alignmentValue.textContent = '1.0';
+      cohesionValue.textContent = '2.5';
+      radiusValue.textContent = '80';
+      speedValue.textContent = '2.5';
+    });
+
+    // Control buttons
+    pauseBtn.addEventListener('click', () => {
+      if (sim.running) {
+        sim.pause();
+        pauseBtn.textContent = 'Resume';
+        pauseBtn.classList.add('active');
+      } else {
+        sim.resume();
+        pauseBtn.textContent = 'Pause';
+        pauseBtn.classList.remove('active');
+      }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      sim.reset();
+    });
+
+    wrapBtn.addEventListener('click', () => {
+      sim.config.boundaryMode = 'wrap';
+      wrapBtn.classList.add('active');
+      bounceBtn.classList.remove('active');
+    });
+
+    bounceBtn.addEventListener('click', () => {
+      sim.config.boundaryMode = 'bounce';
+      bounceBtn.classList.add('active');
+      wrapBtn.classList.remove('active');
+    });
+
+    soundBtn.addEventListener('click', () => {
+      if (sim.soundEnabled) {
+        sim.soundEnabled = false;
+        soundBtn.textContent = 'Sound: OFF';
+        soundBtn.classList.remove('active');
+      } else {
+        sim.enableSound();
+        soundBtn.textContent = 'Sound: ON';
+        soundBtn.classList.add('active');
+      }
+    });
+
+    // Animation loop
+    function animate() {
+      if (sim.running) {
+        sim.update();
+      }
+      sim.render();
+      sim.frameCount++;
+
+      // Update metrics every 10 frames
+      if (sim.frameCount % 10 === 0) {
+        fpsDisplay.textContent = Math.round(sim.calculateFPS());
+        boidCountDisplay.textContent = sim.boids.length;
+        avgSpeedDisplay.textContent = sim.getAverageSpeed().toFixed(1);
+        avgNeighborsDisplay.textContent = sim.getAverageNeighborCount().toFixed(1);
+        collisionsDisplay.textContent = sim.collisionCount;
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

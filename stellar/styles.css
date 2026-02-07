@@ -1,0 +1,183 @@
+/* ============================================
+   Stellar Web - Styles
+   ============================================ */
+
+/* Reset and Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow: hidden;
+    background: #0a0a0f;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Canvas - Full Viewport */
+#stellar-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: block;
+}
+
+/* Control Panel - Collapsible Side Panel */
+#controls {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 300px;
+    height: 100vh;
+    background: rgba(10, 10, 20, 0.92);
+    border-right: 1px solid rgba(100, 150, 255, 0.3);
+    padding: 30px 20px 20px;
+    backdrop-filter: blur(10px);
+    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    overflow-y: auto;
+    transition: transform 0.35s ease;
+}
+
+#controls.collapsed {
+    transform: translateX(-100%);
+}
+
+/* Panel Toggle Button */
+#panel-toggle {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 200;
+    width: 40px;
+    height: 40px;
+    background: rgba(10, 10, 20, 0.85);
+    border: 1px solid rgba(100, 150, 255, 0.3);
+    border-radius: 8px;
+    color: #a0c0ff;
+    font-size: 1.3rem;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    transition: left 0.35s ease, background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#panel-toggle:hover {
+    background: rgba(40, 50, 80, 0.85);
+}
+
+#controls:not(.collapsed) ~ #panel-toggle {
+    left: 308px;
+}
+
+#controls h2 {
+    color: #a0c0ff;
+    font-size: 1.4rem;
+    font-weight: 300;
+    text-align: center;
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+/* Slider Container */
+#sliders-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Individual Slider Group */
+.slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.slider-group label {
+    color: #8090b0;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.slider-group label span {
+    color: #60a0ff;
+    font-weight: 500;
+}
+
+/* Custom Range Slider */
+.slider-group input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: rgba(60, 80, 120, 0.4);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.slider-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #6080ff, #a060ff);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(100, 128, 255, 0.5);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.slider-group input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 15px rgba(100, 128, 255, 0.8);
+}
+
+.slider-group input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #6080ff, #a060ff);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 10px rgba(100, 128, 255, 0.5);
+}
+
+/* Statistics Display */
+#stats {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(100, 150, 255, 0.2);
+    color: #6080a0;
+    font-size: 0.8rem;
+    line-height: 1.6;
+}
+
+#stats div {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+#stats span {
+    color: #80c0ff;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+    #controls {
+        width: 260px;
+    }
+
+    #controls:not(.collapsed) ~ #panel-toggle {
+        left: 268px;
+    }
+}

@@ -1,0 +1,1718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake Quest: Dungeon Roguelike</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; overflow: hidden; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; color: #ddd; }
+canvas { display: block; image-rendering: pixelated; }
+
+#ui-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
+}
+#hud {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 30px; font-size: 14px; color: #f39c12;
+  text-shadow: 1px 1px 3px #000; pointer-events: none;
+}
+.hud-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.hud-item span { font-weight: bold; }
+
+#upgrade-overlay, #menu-overlay, #pause-overlay, #death-overlay, #victory-overlay, #levelclear-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center;
+  flex-direction: column; pointer-events: auto; z-index: 20;
+}
+#upgrade-overlay.active, #menu-overlay.active, #pause-overlay.active, #death-overlay.active, #victory-overlay.active, #levelclear-overlay.active {
+  display: flex;
+}
+
+#levelclear-overlay { background: rgba(0,0,0,0.7); }
+#levelclear-overlay .title { font-size: 36px; animation: clearPulse 0.8s ease-in-out; }
+#levelclear-overlay .subtitle { color: #f39c12; font-size: 18px; }
+@keyframes clearPulse { 0% { transform: scale(0.5); opacity:0; } 50% { transform: scale(1.15); } 100% { transform: scale(1); opacity:1; } }
+
+.title { font-size: 42px; color: #f39c12; margin-bottom: 10px; text-shadow: 0 0 20px rgba(243,156,18,0.5); }
+.subtitle { font-size: 16px; color: #888; margin-bottom: 30px; }
+
+.btn {
+  padding: 12px 40px; margin: 8px; font-size: 18px; cursor: pointer;
+  background: linear-gradient(135deg, #2c3e50, #34495e); border: 2px solid #f39c12;
+  color: #f39c12; border-radius: 8px; transition: all 0.2s;
+  pointer-events: auto; font-family: inherit;
+}
+.btn:hover { background: linear-gradient(135deg, #f39c12, #e67e22); color: #1a1a1a; transform: scale(1.05); }
+
+#upgrade-cards { display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
+.upgrade-card {
+  width: 220px; padding: 20px; background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 2px solid #555; border-radius: 12px; cursor: pointer; text-align: center;
+  transition: all 0.3s; pointer-events: auto; position: relative;
+}
+.upgrade-card:hover { border-color: #f39c12; transform: translateY(-8px); box-shadow: 0 8px 25px rgba(243,156,18,0.3); }
+.upgrade-card .icon { font-size: 36px; margin-bottom: 10px; }
+.upgrade-card .name { font-size: 16px; font-weight: bold; color: #f39c12; margin-bottom: 8px; }
+.upgrade-card .desc { font-size: 12px; color: #aaa; line-height: 1.4; }
+.upgrade-card .activation { font-size: 11px; color: #2ecc71; margin-top: 6px; font-style: italic; }
+.upgrade-card .stack { font-size: 11px; color: #3498db; margin-top: 4px; }
+
+#active-upgrades {
+  position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; flex-wrap: wrap;
+  max-width: 200px; justify-content: flex-end; pointer-events: none;
+}
+.upgrade-icon {
+  width: 28px; height: 28px; border-radius: 4px; background: rgba(0,0,0,0.7);
+  border: 1px solid #555; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; position: relative;
+}
+.upgrade-icon .cooldown-overlay {
+  position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7);
+  border-radius: 0 0 4px 4px; text-align: center; font-size: 8px; color: #e74c3c;
+}
+
+#score-display {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  font-size: 14px; color: #888; pointer-events: none;
+}
+
+#level-announce {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  font-size: 48px; color: #f39c12; text-shadow: 0 0 30px rgba(243,156,18,0.5);
+  pointer-events: none; opacity: 0; transition: opacity 0.5s;
+  z-index: 15;
+}
+
+#controls-help {
+  position: absolute; bottom: 60px; font-size: 12px; color: #555; text-align: center;
+  pointer-events: none;
+}
+
+.treasure-room { text-align: center; }
+.treasure-room .emoji-row { font-size: 40px; margin: 10px 0; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui-overlay">
+  <div id="hud">
+    <div class="hud-item">🏰 Level <span id="hud-level">1</span></div>
+    <div class="hud-item">🍎 <span id="hud-apples">0/0</span></div>
+    <div class="hud-item">🛡 <span id="hud-charges"></span></div>
+  </div>
+  <div id="active-upgrades"></div>
+  <div id="score-display">Score: <span id="hud-score">0</span></div>
+  <div id="ability-hint" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); font-size:12px; color:#555; pointer-events:none; text-align:center;"></div>
+  <div id="level-announce"></div>
+</div>
+
+<div id="menu-overlay" class="active">
+  <div class="title">🐍 Snake Quest</div>
+  <div class="subtitle">Dungeon Roguelike</div>
+  <button class="btn" onclick="game.startGame()">⚔️ Begin Quest</button>
+  <div id="controls-help">
+    WASD / Arrow Keys: Move &nbsp;|&nbsp; Space: Use Ability &nbsp;|&nbsp; P/Esc: Pause
+  </div>
+</div>
+
+<div id="pause-overlay">
+  <div class="title" style="font-size:32px">⏸ Paused</div>
+  <button class="btn" onclick="game.resume()">Resume</button>
+  <button class="btn" onclick="game.showUpgradeList()">View Upgrades</button>
+  <button class="btn" onclick="game.restartRun()">Restart Run</button>
+  <div id="pause-upgrades" style="margin-top:15px; font-size:13px; color:#aaa; max-width:400px; text-align:center;"></div>
+</div>
+
+<div id="death-overlay">
+  <div class="title" style="font-size:32px; color:#e74c3c;">💀 You Died</div>
+  <div class="subtitle" id="death-msg">The dungeon claims another soul...</div>
+  <button class="btn" onclick="game.restartRun()">Try Again</button>
+</div>
+
+<div id="upgrade-overlay">
+  <div class="title" style="font-size:28px">⬆️ Choose an Upgrade</div>
+  <div class="subtitle">Select one to aid your quest</div>
+  <div id="upgrade-cards"></div>
+</div>
+
+<div id="levelclear-overlay">
+  <div class="title">✨ Level Complete!</div>
+  <div class="subtitle" id="levelclear-msg">All apples collected</div>
+</div>
+
+<div id="victory-overlay">
+  <div class="treasure-room">
+    <div class="title">🏆 Victory!</div>
+    <div class="emoji-row">💰👑💎🏅💰</div>
+    <div class="subtitle" style="color:#f39c12">You have conquered the dungeon!<br>Well done, brave serpent.</div>
+    <div class="emoji-row">🪙🗝️📜⚔️🛡️</div>
+    <div id="final-score" style="font-size:20px; color:#ddd; margin:15px 0;"></div>
+    <button class="btn" onclick="game.restartRun()">Play Again</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// LEVEL DATA
+// ============================================================
+const LEVELS = [
+  { // Level 1: Basic movement
+    id:1, boardSize:{w:15,h:15}, startPos:{x:7,y:7}, startDir:'right', startLength:3,
+    apples:[{x:3,y:3},{x:11,y:11},{x:7,y:2}],
+    barriers:[], lava:[], turrets:[]
+  },
+  { // Level 2: Simple barriers
+    id:2, boardSize:{w:15,h:15}, startPos:{x:2,y:7}, startDir:'right', startLength:3,
+    apples:[{x:12,y:3},{x:12,y:11},{x:7,y:7},{x:3,y:12}],
+    barriers:[{x:7,y:5},{x:7,y:6},{x:7,y:8},{x:7,y:9}],
+    lava:[], turrets:[]
+  },
+  { // Level 3: Introduce lava
+    id:3, boardSize:{w:15,h:15}, startPos:{x:1,y:1}, startDir:'right', startLength:3,
+    apples:[{x:13,y:1},{x:13,y:13},{x:1,y:13},{x:7,y:3}],
+    barriers:[{x:5,y:5},{x:5,y:9},{x:9,y:5},{x:9,y:9}],
+    lava:[{x:6,y:7},{x:7,y:6},{x:8,y:7},{x:7,y:8}],
+    turrets:[]
+  },
+  { // Level 4: First turret - shoots across the path to apples
+    id:4, boardSize:{w:18,h:18}, startPos:{x:1,y:9}, startDir:'right', startLength:3,
+    apples:[{x:5,y:3},{x:12,y:3},{x:16,y:9},{x:12,y:15},{x:5,y:15}],
+    barriers:[{x:8,y:0},{x:8,y:1},{x:8,y:2},{x:8,y:15},{x:8,y:16},{x:8,y:17}],
+    lava:[],
+    turrets:[{x:0,y:9,type:'cardinal',dir:'right',fireRate:2200,speed:4}]
+  },
+  { // Level 5: Combination - turret sweeps the middle corridor
+    id:5, boardSize:{w:18,h:18}, startPos:{x:9,y:9}, startDir:'right', startLength:3,
+    apples:[{x:3,y:3},{x:15,y:3},{x:15,y:15},{x:3,y:15},{x:9,y:1}],
+    barriers:[{x:6,y:6},{x:6,y:7},{x:6,y:8},{x:11,y:6},{x:11,y:7},{x:11,y:8},{x:7,y:6},{x:8,y:6},{x:9,y:6},{x:10,y:6}],
+    lava:[{x:7,y:11},{x:8,y:11},{x:9,y:11},{x:10,y:11}],
+    turrets:[{x:0,y:3,type:'cardinal',dir:'right',fireRate:2000,speed:4}]
+  },
+  { // Level 6: Multiple turrets
+    id:6, boardSize:{w:20,h:20}, startPos:{x:10,y:10}, startDir:'right', startLength:4,
+    apples:[{x:3,y:3},{x:16,y:3},{x:16,y:16},{x:3,y:16},{x:10,y:5},{x:10,y:15}],
+    barriers:[{x:9,y:9},{x:10,y:9},{x:11,y:9},{x:9,y:11},{x:10,y:11},{x:11,y:11}],
+    lava:[{x:5,y:10},{x:14,y:10}],
+    turrets:[
+      {x:0,y:10,type:'cardinal',dir:'right',fireRate:1800,speed:4},
+      {x:19,y:5,type:'cardinal',dir:'left',fireRate:2000,speed:4}
+    ]
+  },
+  { // Level 7: Barrier maze
+    id:7, boardSize:{w:20,h:20}, startPos:{x:1,y:1}, startDir:'right', startLength:3,
+    apples:[{x:18,y:1},{x:18,y:18},{x:1,y:18},{x:10,y:10},{x:5,y:10},{x:15,y:10}],
+    barriers:[
+      {x:3,y:0},{x:3,y:1},{x:3,y:2},{x:3,y:3},{x:3,y:4},{x:3,y:5},
+      {x:7,y:14},{x:7,y:15},{x:7,y:16},{x:7,y:17},{x:7,y:18},{x:7,y:19},
+      {x:12,y:0},{x:12,y:1},{x:12,y:2},{x:12,y:3},{x:12,y:4},{x:12,y:5},
+      {x:16,y:14},{x:16,y:15},{x:16,y:16},{x:16,y:17},{x:16,y:18},{x:16,y:19}
+    ],
+    lava:[{x:10,y:3},{x:10,y:16},{x:3,y:10},{x:16,y:10}],
+    turrets:[]
+  },
+  { // Level 8: Lava corridors
+    id:8, boardSize:{w:18,h:18}, startPos:{x:1,y:9}, startDir:'right', startLength:3,
+    apples:[{x:16,y:1},{x:16,y:16},{x:9,y:9},{x:1,y:1},{x:1,y:16},{x:9,y:1},{x:9,y:16}],
+    barriers:[],
+    lava:[
+      ...Array.from({length:18},(_,i)=>({x:i,y:4})).filter(p=>p.x!==1&&p.x!==9&&p.x!==16),
+      ...Array.from({length:18},(_,i)=>({x:i,y:13})).filter(p=>p.x!==1&&p.x!==9&&p.x!==16),
+      ...Array.from({length:18},(_,i)=>({x:5,y:i})).filter(p=>p.y!==1&&p.y!==9&&p.y!==16),
+      ...Array.from({length:18},(_,i)=>({x:13,y:i})).filter(p=>p.y!==1&&p.y!==9&&p.y!==16)
+    ],
+    turrets:[]
+  },
+  { // Level 9: Turret gauntlet
+    id:9, boardSize:{w:22,h:18}, startPos:{x:1,y:9}, startDir:'right', startLength:3,
+    apples:[{x:5,y:4},{x:10,y:4},{x:15,y:4},{x:5,y:13},{x:10,y:13},{x:15,y:13},{x:20,y:9}],
+    barriers:[{x:0,y:4},{x:0,y:13},{x:21,y:4},{x:21,y:13}],
+    lava:[],
+    turrets:[
+      {x:0,y:4,type:'cardinal',dir:'right',fireRate:1800,speed:5},
+      {x:21,y:9,type:'cardinal',dir:'left',fireRate:1600,speed:5},
+      {x:0,y:13,type:'cardinal',dir:'right',fireRate:2000,speed:5},
+      {x:21,y:4,type:'cardinal',dir:'left',fireRate:2200,speed:5}
+    ]
+  },
+  { // Level 10: Tight combo
+    id:10, boardSize:{w:15,h:15}, startPos:{x:7,y:7}, startDir:'up', startLength:4,
+    apples:[{x:2,y:2},{x:12,y:2},{x:12,y:12},{x:2,y:12},{x:7,y:1},{x:7,y:13},{x:1,y:7},{x:13,y:7}],
+    barriers:[{x:5,y:5},{x:5,y:9},{x:9,y:5},{x:9,y:9},{x:6,y:5},{x:8,y:5},{x:6,y:9},{x:8,y:9},{x:5,y:6},{x:5,y:8},{x:9,y:6},{x:9,y:8}],
+    lava:[{x:7,y:5},{x:7,y:9},{x:5,y:7},{x:9,y:7}],
+    turrets:[
+      {x:0,y:7,type:'cardinal',dir:'right',fireRate:1800,speed:5},
+      {x:14,y:7,type:'cardinal',dir:'left',fireRate:1800,speed:5}
+    ]
+  },
+  { // Level 11: Dense hazards
+    id:11, boardSize:{w:22,h:22}, startPos:{x:11,y:11}, startDir:'right', startLength:4,
+    apples:[{x:3,y:3},{x:18,y:3},{x:18,y:18},{x:3,y:18},{x:11,y:3},{x:11,y:18},{x:3,y:11},{x:18,y:11},{x:8,y:8},{x:14,y:14}],
+    barriers:[
+      {x:7,y:7},{x:7,y:8},{x:7,y:9},{x:8,y:7},{x:14,y:7},{x:14,y:8},{x:14,y:9},{x:13,y:7},
+      {x:7,y:13},{x:7,y:14},{x:8,y:14},{x:14,y:13},{x:14,y:14},{x:13,y:14}
+    ],
+    lava:[{x:10,y:10},{x:11,y:10},{x:12,y:10},{x:10,y:11},{x:12,y:11},{x:10,y:12},{x:11,y:12},{x:12,y:12}],
+    turrets:[
+      {x:0,y:11,type:'cardinal',dir:'right',fireRate:1600,speed:5},
+      {x:11,y:0,type:'cardinal',dir:'down',fireRate:1600,speed:5},
+      {x:21,y:11,type:'cardinal',dir:'left',fireRate:2000,speed:5}
+    ]
+  },
+  { // Level 12: Timing challenge
+    id:12, boardSize:{w:20,h:20}, startPos:{x:10,y:18}, startDir:'up', startLength:4,
+    apples:[{x:3,y:1},{x:10,y:1},{x:16,y:1},{x:3,y:10},{x:16,y:10},{x:10,y:6},{x:7,y:14},{x:13,y:14},{x:10,y:18}],
+    barriers:[
+      ...Array.from({length:14},(_,i)=>({x:i+3,y:5})).filter(p=>p.x!==10),
+      ...Array.from({length:14},(_,i)=>({x:i+3,y:12})).filter(p=>p.x!==7&&p.x!==13)
+    ],
+    lava:[{x:9,y:5},{x:11,y:5}],
+    turrets:[
+      {x:0,y:3,type:'cardinal',dir:'right',fireRate:1400,speed:6},
+      {x:19,y:8,type:'cardinal',dir:'left',fireRate:1400,speed:6},
+      {x:0,y:15,type:'cardinal',dir:'right',fireRate:1800,speed:5}
+    ]
+  },
+  { // Level 13: Spiral
+    id:13, boardSize:{w:25,h:25}, startPos:{x:12,y:12}, startDir:'right', startLength:4,
+    apples:[{x:1,y:1},{x:23,y:1},{x:23,y:23},{x:1,y:23},{x:6,y:6},{x:18,y:6},{x:18,y:18},{x:6,y:18},{x:12,y:3},{x:12,y:21}],
+    barriers:[
+      ...Array.from({length:20},(_,i)=>({x:3,y:i+3})).filter(p=>p.y<22),
+      ...Array.from({length:16},(_,i)=>({x:i+5,y:22})),
+      ...Array.from({length:16},(_,i)=>({x:21,y:i+3})).filter(p=>p.y<20),
+      ...Array.from({length:14},(_,i)=>({x:i+5,y:3})).filter(p=>p.x<19)
+    ],
+    lava:[{x:12,y:11},{x:12,y:13},{x:11,y:12},{x:13,y:12}],
+    turrets:[
+      {x:0,y:12,type:'cardinal',dir:'right',fireRate:1500,speed:5},
+      {x:24,y:12,type:'cardinal',dir:'left',fireRate:1500,speed:5}
+    ]
+  },
+  { // Level 14: Island hopping
+    id:14, boardSize:{w:25,h:25}, startPos:{x:2,y:2}, startDir:'right', startLength:3,
+    apples:[{x:12,y:2},{x:22,y:2},{x:22,y:12},{x:22,y:22},{x:12,y:22},{x:2,y:22},{x:2,y:12},{x:12,y:12},{x:7,y:7},{x:17,y:17},{x:17,y:7}],
+    barriers:[
+      {x:5,y:0},{x:5,y:1},{x:5,y:2},{x:5,y:3},{x:5,y:4},
+      {x:9,y:4},{x:9,y:5},{x:9,y:6},{x:9,y:7},{x:9,y:8},
+      {x:15,y:0},{x:15,y:1},{x:15,y:2},{x:15,y:3},{x:15,y:4},
+      {x:19,y:4},{x:19,y:5},{x:19,y:6},{x:19,y:7},{x:19,y:8}
+    ],
+    lava:[
+      ...Array.from({length:25},(_,i)=>({x:i,y:9})).filter(p=>p.x!==2&&p.x!==12&&p.x!==22),
+      ...Array.from({length:25},(_,i)=>({x:i,y:15})).filter(p=>p.x!==2&&p.x!==12&&p.x!==22)
+    ],
+    turrets:[
+      {x:0,y:5,type:'cardinal',dir:'right',fireRate:1600,speed:5},
+      {x:24,y:20,type:'cardinal',dir:'left',fireRate:1600,speed:5}
+    ]
+  },
+  { // Level 15: Crossfire
+    id:15, boardSize:{w:22,h:22}, startPos:{x:11,y:11}, startDir:'up', startLength:5,
+    apples:[{x:5,y:5},{x:16,y:5},{x:16,y:16},{x:5,y:16},{x:11,y:2},{x:11,y:19},{x:2,y:11},{x:19,y:11},{x:8,y:8},{x:14,y:14},{x:14,y:8},{x:8,y:14}],
+    barriers:[{x:10,y:10},{x:11,y:10},{x:12,y:10},{x:10,y:12},{x:11,y:12},{x:12,y:12},{x:10,y:11},{x:12,y:11}],
+    lava:[],
+    turrets:[
+      {x:0,y:11,type:'cardinal',dir:'right',fireRate:1200,speed:6},
+      {x:11,y:0,type:'cardinal',dir:'down',fireRate:1200,speed:6},
+      {x:21,y:11,type:'cardinal',dir:'left',fireRate:1200,speed:6},
+      {x:11,y:21,type:'cardinal',dir:'up',fireRate:1200,speed:6}
+    ]
+  },
+  { // Level 16: Mastery begins
+    id:16, boardSize:{w:25,h:25}, startPos:{x:12,y:12}, startDir:'right', startLength:5,
+    apples:[{x:2,y:2},{x:22,y:2},{x:22,y:22},{x:2,y:22},{x:12,y:2},{x:12,y:22},{x:2,y:12},{x:22,y:12},{x:7,y:7},{x:17,y:7},{x:17,y:17},{x:7,y:17},{x:12,y:7},{x:12,y:17}],
+    barriers:[
+      ...Array.from({length:5},(_,i)=>({x:6+i,y:5})),
+      ...Array.from({length:5},(_,i)=>({x:14+i,y:5})),
+      ...Array.from({length:5},(_,i)=>({x:6+i,y:19})),
+      ...Array.from({length:5},(_,i)=>({x:14+i,y:19})),
+      ...Array.from({length:5},(_,i)=>({x:5,y:6+i})),
+      ...Array.from({length:5},(_,i)=>({x:5,y:14+i})),
+      ...Array.from({length:5},(_,i)=>({x:19,y:6+i})),
+      ...Array.from({length:5},(_,i)=>({x:19,y:14+i}))
+    ],
+    lava:[{x:11,y:11},{x:13,y:11},{x:11,y:13},{x:13,y:13},{x:12,y:10},{x:12,y:14},{x:10,y:12},{x:14,y:12}],
+    turrets:[
+      {x:0,y:12,type:'cardinal',dir:'right',fireRate:1200,speed:6},
+      {x:24,y:12,type:'cardinal',dir:'left',fireRate:1200,speed:6},
+      {x:12,y:0,type:'cardinal',dir:'down',fireRate:1500,speed:5},
+      {x:12,y:24,type:'cardinal',dir:'up',fireRate:1500,speed:5}
+    ]
+  },
+  { // Level 17: Narrow escape
+    id:17, boardSize:{w:28,h:18}, startPos:{x:1,y:9}, startDir:'right', startLength:4,
+    apples:[{x:5,y:2},{x:10,y:2},{x:15,y:2},{x:20,y:2},{x:25,y:2},{x:5,y:15},{x:10,y:15},{x:15,y:15},{x:20,y:15},{x:25,y:15},{x:14,y:9},{x:26,y:9}],
+    barriers:[
+      ...Array.from({length:28},(_,i)=>({x:i,y:6})).filter(p=>p.x%5!==0),
+      ...Array.from({length:28},(_,i)=>({x:i,y:11})).filter(p=>p.x%5!==0)
+    ],
+    lava:[
+      {x:7,y:4},{x:7,y:5},{x:12,y:4},{x:12,y:5},{x:17,y:4},{x:17,y:5},{x:22,y:4},{x:22,y:5},
+      {x:7,y:12},{x:7,y:13},{x:12,y:12},{x:12,y:13},{x:17,y:12},{x:17,y:13},{x:22,y:12},{x:22,y:13}
+    ],
+    turrets:[
+      {x:0,y:0,type:'cardinal',dir:'right',fireRate:1000,speed:6},
+      {x:27,y:17,type:'cardinal',dir:'left',fireRate:1000,speed:6},
+      {x:14,y:0,type:'cardinal',dir:'down',fireRate:1400,speed:5},
+      {x:14,y:17,type:'cardinal',dir:'up',fireRate:1400,speed:5}
+    ]
+  },
+  { // Level 18: The arena
+    id:18, boardSize:{w:25,h:25}, startPos:{x:12,y:12}, startDir:'right', startLength:5,
+    apples:[{x:4,y:4},{x:20,y:4},{x:20,y:20},{x:4,y:20},{x:12,y:4},{x:12,y:20},{x:4,y:12},{x:20,y:12},{x:8,y:8},{x:16,y:8},{x:16,y:16},{x:8,y:16},{x:12,y:8},{x:12,y:16}],
+    barriers:[
+      ...Array.from({length:7},(_,i)=>({x:9+i,y:10})).filter(p=>p.x!==12),
+      ...Array.from({length:7},(_,i)=>({x:9+i,y:14})).filter(p=>p.x!==12),
+      ...Array.from({length:3},(_,i)=>({x:10,y:11+i})),
+      ...Array.from({length:3},(_,i)=>({x:14,y:11+i}))
+    ],
+    lava:[
+      {x:11,y:11},{x:13,y:11},{x:11,y:13},{x:13,y:13},
+      {x:6,y:6},{x:18,y:6},{x:6,y:18},{x:18,y:18}
+    ],
+    turrets:[
+      {x:0,y:12,type:'cardinal',dir:'right',fireRate:1000,speed:6},
+      {x:12,y:0,type:'cardinal',dir:'down',fireRate:1000,speed:6},
+      {x:24,y:12,type:'cardinal',dir:'left',fireRate:1000,speed:6},
+      {x:12,y:24,type:'cardinal',dir:'up',fireRate:1000,speed:6},
+      {x:0,y:4,type:'cardinal',dir:'right',fireRate:1500,speed:5},
+      {x:24,y:20,type:'cardinal',dir:'left',fireRate:1500,speed:5}
+    ]
+  },
+  { // Level 19: The gauntlet
+    id:19, boardSize:{w:30,h:20}, startPos:{x:1,y:10}, startDir:'right', startLength:5,
+    apples:[
+      {x:4,y:3},{x:9,y:3},{x:14,y:3},{x:19,y:3},{x:24,y:3},{x:28,y:10},
+      {x:4,y:16},{x:9,y:16},{x:14,y:16},{x:19,y:16},{x:24,y:16},
+      {x:14,y:10},{x:7,y:10},{x:21,y:10}
+    ],
+    barriers:[
+      ...Array.from({length:30},(_,i)=>({x:i,y:7})).filter(p=>p.x%7===0||p.x===29),
+      ...Array.from({length:30},(_,i)=>({x:i,y:12})).filter(p=>p.x%7===0||p.x===29)
+    ],
+    lava:[
+      ...Array.from({length:5},(_,i)=>({x:3+i,y:5})),
+      ...Array.from({length:5},(_,i)=>({x:10+i,y:5})),
+      ...Array.from({length:5},(_,i)=>({x:17+i,y:5})),
+      ...Array.from({length:5},(_,i)=>({x:3+i,y:14})),
+      ...Array.from({length:5},(_,i)=>({x:10+i,y:14})),
+      ...Array.from({length:5},(_,i)=>({x:17+i,y:14}))
+    ],
+    turrets:[
+      {x:0,y:0,type:'cardinal',dir:'right',fireRate:900,speed:7},
+      {x:29,y:0,type:'cardinal',dir:'left',fireRate:900,speed:7},
+      {x:0,y:19,type:'cardinal',dir:'right',fireRate:1100,speed:6},
+      {x:29,y:19,type:'cardinal',dir:'left',fireRate:1100,speed:6},
+      {x:15,y:0,type:'cardinal',dir:'down',fireRate:1300,speed:5},
+      {x:15,y:19,type:'cardinal',dir:'up',fireRate:1300,speed:5}
+    ]
+  },
+  { // Level 20: Final challenge
+    id:20, boardSize:{w:30,h:30}, startPos:{x:15,y:15}, startDir:'right', startLength:6,
+    apples:[
+      {x:3,y:3},{x:15,y:3},{x:27,y:3},{x:27,y:15},{x:27,y:27},{x:15,y:27},{x:3,y:27},{x:3,y:15},
+      {x:8,y:8},{x:22,y:8},{x:22,y:22},{x:8,y:22},{x:15,y:8},{x:15,y:22},{x:8,y:15},{x:22,y:15}
+    ],
+    barriers:[
+      ...Array.from({length:10},(_,i)=>({x:5+i,y:5})),
+      ...Array.from({length:10},(_,i)=>({x:15+i,y:5})),
+      ...Array.from({length:10},(_,i)=>({x:5+i,y:24})),
+      ...Array.from({length:10},(_,i)=>({x:15+i,y:24})),
+      ...Array.from({length:8},(_,i)=>({x:5,y:6+i})),
+      ...Array.from({length:8},(_,i)=>({x:24,y:6+i})),
+      ...Array.from({length:8},(_,i)=>({x:5,y:16+i})),
+      ...Array.from({length:8},(_,i)=>({x:24,y:16+i})),
+      {x:14,y:14},{x:15,y:14},{x:16,y:14},{x:14,y:16},{x:15,y:16},{x:16,y:16},{x:14,y:15},{x:16,y:15}
+    ],
+    lava:[
+      ...Array.from({length:6},(_,i)=>({x:10+i,y:10})),
+      ...Array.from({length:6},(_,i)=>({x:15+i,y:10})),
+      ...Array.from({length:6},(_,i)=>({x:10+i,y:19})),
+      ...Array.from({length:6},(_,i)=>({x:15+i,y:19})),
+      {x:10,y:11},{x:10,y:12},{x:20,y:11},{x:20,y:12},
+      {x:10,y:17},{x:10,y:18},{x:20,y:17},{x:20,y:18}
+    ],
+    turrets:[
+      {x:0,y:8,type:'cardinal',dir:'right',fireRate:800,speed:7},
+      {x:8,y:0,type:'cardinal',dir:'down',fireRate:800,speed:7},
+      {x:29,y:22,type:'cardinal',dir:'left',fireRate:800,speed:7},
+      {x:22,y:29,type:'cardinal',dir:'up',fireRate:800,speed:7},
+      {x:15,y:0,type:'cardinal',dir:'down',fireRate:1000,speed:6},
+      {x:0,y:15,type:'cardinal',dir:'right',fireRate:1000,speed:6},
+      {x:29,y:15,type:'cardinal',dir:'left',fireRate:1000,speed:6},
+      {x:15,y:29,type:'cardinal',dir:'up',fireRate:1000,speed:6}
+    ]
+  }
+];
+
+// ============================================================
+// UPGRADE DEFINITIONS
+// ============================================================
+const UPGRADE_POOL = [
+  {id:'ghost_tail',name:'Ghost Tail',icon:'👻',desc:'Last {v} tail segments are passable',baseVal:3,stackVal:2,maxStacks:5,type:'passive',cat:'defensive'},
+  {id:'proj_shield',name:'Projectile Shield',icon:'🛡️',desc:'Absorb {v} projectile hits',baseVal:3,stackVal:2,maxStacks:99,type:'passive',cat:'defensive'},
+  {id:'lava_resist',name:'Lava Resistance',icon:'🔥',desc:'Survive {v} lava contacts',baseVal:2,stackVal:1,maxStacks:99,type:'passive',cat:'defensive'},
+  {id:'wall_phase',name:'Wall Phase',icon:'🌀',desc:'{v} barrier pass(es) per level',baseVal:1,stackVal:1,maxStacks:99,type:'passive',cat:'defensive',resetsPerLevel:true},
+  {id:'time_dilation',name:'Time Dilation',icon:'⏳',desc:'Slow to 30% for {v}s (Space)',baseVal:3,stackVal:2,maxStacks:99,type:'active',cat:'mobility',cooldown:15000},
+  {id:'speed_boost',name:'Speed Boost',icon:'⚡',desc:'+{v}% movement speed',baseVal:15,stackVal:10,maxStacks:3,type:'passive',cat:'mobility'},
+  {id:'dash',name:'Dash',icon:'💨',desc:'{v} dash charge(s) per level',baseVal:1,stackVal:1,maxStacks:99,type:'active',cat:'mobility',resetsPerLevel:true},
+  {id:'shrink',name:'Shrink Ray',icon:'🔬',desc:'{v} use(s) per level: remove 3 tail segments',baseVal:1,stackVal:1,maxStacks:99,type:'active',cat:'tactical',resetsPerLevel:true},
+  {id:'magnet',name:'Apple Magnet',icon:'🧲',desc:'Auto-collect apples {v} squares away',baseVal:2,stackVal:1,maxStacks:3,type:'passive',cat:'tactical'},
+  {id:'turret_hack',name:'Turret Hack',icon:'🔧',desc:'Disable {v} random turret(s) per level',baseVal:2,stackVal:1,maxStacks:99,type:'passive',cat:'tactical',resetsPerLevel:true},
+  {id:'invincible',name:'Invincibility',icon:'✨',desc:'{v}s invulnerability (Space)',baseVal:2,stackVal:1,maxStacks:99,type:'active',cat:'tactical',cooldown:20000},
+  {id:'selective_growth',name:'Selective Growth',icon:'🌱',desc:'Every {v}nd apple: no growth',baseVal:2,stackVal:1,maxStacks:5,type:'passive',cat:'growth'},
+  {id:'deflector',name:'Projectile Deflector',icon:'🪃',desc:'{v}% chance to deflect projectiles',baseVal:25,stackVal:15,maxStacks:4,type:'passive',cat:'offensive'},
+  {id:'portal',name:'Portal Pair',icon:'🌀',desc:'{v} portal pair(s) per level (Space)',baseVal:1,stackVal:1,maxStacks:99,type:'active',cat:'utility',resetsPerLevel:true},
+  {id:'second_chance',name:'Second Chance',icon:'🔄',desc:'{v} revive(s) on death',baseVal:1,stackVal:1,maxStacks:3,type:'passive',cat:'defensive'},
+  {id:'future_sight',name:'Future Sight',icon:'👁️',desc:'See projectile paths {v}s ahead (Space)',baseVal:2,stackVal:1,maxStacks:99,type:'active',cat:'vision',cooldown:12000},
+  {id:'detector',name:'Apple Vision',icon:'📡',desc:'See {v} extra apple(s) ahead',baseVal:1,stackVal:1,maxStacks:5,type:'passive',cat:'vision'},
+  {id:'safe_path',name:'Safe Path',icon:'🗺️',desc:'{v} use(s): show path to apple',baseVal:1,stackVal:1,maxStacks:99,type:'active',cat:'vision',resetsPerLevel:true},
+  {id:'score_multi',name:'Score Multiplier',icon:'💰',desc:'{v}x points for everything',baseVal:1.5,stackVal:0.25,maxStacks:99,type:'passive',cat:'score'},
+  {id:'apple_value',name:'Apple Value',icon:'💎',desc:'Apples worth {v}x points',baseVal:2,stackVal:1,maxStacks:99,type:'passive',cat:'score'},
+  {id:'venomous_trail',name:'Venomous Trail',icon:'☠️',desc:'Leave lava trail for {v}s (Space)',baseVal:3,stackVal:2,maxStacks:99,type:'active',cat:'offensive',cooldown:25000}
+];
+
+// ============================================================
+// PARTICLE POOL
+// ============================================================
+class ParticlePool {
+  constructor(max=200) {
+    this.pool = Array.from({length:max},()=>({active:false,x:0,y:0,vx:0,vy:0,life:0,maxLife:1,color:'#fff',size:3}));
+  }
+  spawn(x,y,vx,vy,life,color,size=3) {
+    const p = this.pool.find(p=>!p.active);
+    if(!p) return;
+    Object.assign(p,{active:true,x,y,vx,vy,life,maxLife:life,color,size});
+  }
+  burst(x,y,count,color,spread=3,life=0.8) {
+    for(let i=0;i<count;i++) {
+      const angle = Math.random()*Math.PI*2;
+      const speed = Math.random()*spread;
+      this.spawn(x,y,Math.cos(angle)*speed,Math.sin(angle)*speed,life+Math.random()*0.3,color,2+Math.random()*3);
+    }
+  }
+  update(dt) {
+    for(const p of this.pool) {
+      if(!p.active) continue;
+      p.x+=p.vx*dt*60; p.y+=p.vy*dt*60;
+      p.life-=dt;
+      if(p.life<=0) p.active=false;
+    }
+  }
+  render(ctx) {
+    for(const p of this.pool) {
+      if(!p.active) continue;
+      const alpha = Math.max(0,p.life/p.maxLife);
+      ctx.globalAlpha=alpha;
+      ctx.fillStyle=p.color;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.size*alpha,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+}
+
+// ============================================================
+// MAIN GAME CLASS
+// ============================================================
+class Game {
+  constructor() {
+    this.canvas = document.getElementById('gameCanvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.state = 'MENU';
+    this.currentLevel = 0;
+    this.score = 0;
+    this.upgrades = {};
+    this.upgradeStacks = {};
+    this.cooldowns = {};
+    this.chargesUsed = {};
+    this.particles = new ParticlePool(300);
+    this.projectiles = [];
+    this.snake = [];
+    this.direction = 'right';
+    this.nextDirection = null;
+    this.apples = [];
+    this.applesCollected = 0;
+    this.moveTimer = 0;
+    this.moveInterval = 150;
+    this.baseMoveInterval = 150;
+    this.turretTimers = [];
+    this.disabledTurrets = new Set();
+    this.shakeTimer = 0;
+    this.shakeIntensity = 0;
+    this.levelAnnounceTimer = 0;
+    this.appleCounter = 0;
+    this.timeDilationActive = false;
+    this.invincibleActive = false;
+    this.invincibleTimer = 0;
+    this.futureSightActive = false;
+    this.futureSightTimer = 0;
+    this.venomousTrailActive = false;
+    this.venomousTrailTimer = 0;
+    this.venomousTrailTiles = [];
+    this.portalMode = false;
+    this.portals = [];
+    this.safePathTiles = [];
+    this.safePathTimer = 0;
+    this.secondChanceUsed = 0;
+    this.cellSize = 24;
+    this.offsetX = 0;
+    this.offsetY = 0;
+    this.lavaAnimTime = 0;
+    this.lastTime = 0;
+    // Smooth movement interpolation
+    this.moveProgress = 0;
+    this.prevSnake = [];
+    this.levelClearTimer = 0;
+    this.pendingGrowth = 0;
+    this.visibleAppleIndex = 0; // for single-apple-at-a-time visibility
+
+    this.resize();
+    window.addEventListener('resize', ()=>this.resize());
+    window.addEventListener('keydown', e=>this.handleKey(e));
+
+    this.gameLoop = this.gameLoop.bind(this);
+    requestAnimationFrame(this.gameLoop);
+  }
+
+  resize() {
+    this.canvas.width = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+    if(this.state==='PLAYING'||this.state==='PAUSED') this.calculateLayout();
+  }
+
+  calculateLayout() {
+    const lvl = LEVELS[this.currentLevel];
+    const maxW = this.canvas.width - 40;
+    const maxH = this.canvas.height - 80;
+    this.cellSize = Math.floor(Math.min(maxW/lvl.boardSize.w, maxH/lvl.boardSize.h));
+    this.cellSize = Math.max(12, Math.min(this.cellSize, 32));
+    this.offsetX = Math.floor((this.canvas.width - lvl.boardSize.w*this.cellSize)/2);
+    this.offsetY = Math.floor((this.canvas.height - lvl.boardSize.h*this.cellSize)/2)+15;
+  }
+
+  handleKey(e) {
+    const key = e.key.toLowerCase();
+    if(this.state==='LEVEL_CLEAR') { e.preventDefault(); return; }
+    if(this.state==='PLAYING') {
+      const dirMap = {arrowup:'up',arrowdown:'down',arrowleft:'left',arrowright:'right',w:'up',s:'down',a:'left',d:'right'};
+      const dir = dirMap[key];
+      if(dir) {
+        e.preventDefault();
+        const opposite = {up:'down',down:'up',left:'right',right:'left'};
+        if(opposite[dir]!==this.direction) this.nextDirection = dir;
+      }
+      if(key==='p'||key==='escape') { e.preventDefault(); this.pause(); }
+      if(key===' ') { e.preventDefault(); this.useAbility(); }
+    } else if(this.state==='PAUSED') {
+      if(key==='p'||key==='escape') { e.preventDefault(); this.resume(); }
+    }
+  }
+
+  // ---- STATE MANAGEMENT ----
+  startGame() {
+    this.currentLevel = 0;
+    this.score = 0;
+    this.upgrades = {};
+    this.upgradeStacks = {};
+    this.cooldowns = {};
+    this.secondChanceUsed = 0;
+    this.appleCounter = 0;
+    document.getElementById('menu-overlay').classList.remove('active');
+    this.loadLevel(0);
+  }
+
+  restartRun() {
+    document.querySelectorAll('#death-overlay,#pause-overlay,#victory-overlay').forEach(el=>el.classList.remove('active'));
+    document.getElementById('menu-overlay').classList.add('active');
+    this.state = 'MENU';
+  }
+
+  pause() {
+    this.state = 'PAUSED';
+    document.getElementById('pause-overlay').classList.add('active');
+  }
+
+  resume() {
+    document.getElementById('pause-overlay').classList.remove('active');
+    document.getElementById('pause-upgrades').innerHTML = '';
+    this.state = 'PLAYING';
+    this.lastTime = performance.now();
+  }
+
+  showUpgradeList() {
+    const el = document.getElementById('pause-upgrades');
+    const entries = Object.keys(this.upgrades);
+    if(!entries.length) { el.innerHTML='No upgrades yet.'; return; }
+    el.innerHTML = entries.map(id=>{
+      const def = UPGRADE_POOL.find(u=>u.id===id);
+      const stk = this.upgradeStacks[id]||1;
+      const val = this.getUpgradeValue(id);
+      return `${def.icon} ${def.name} (x${stk}) - ${def.desc.replace('{v}',val)}`;
+    }).join('<br>');
+  }
+
+  die(reason) {
+    // Check second chance
+    const sc = this.getUpgradeValue('second_chance');
+    if(sc && this.secondChanceUsed < sc) {
+      this.secondChanceUsed++;
+      this.particles.burst(
+        this.offsetX+this.snake[0].x*this.cellSize+this.cellSize/2,
+        this.offsetY+this.snake[0].y*this.cellSize+this.cellSize/2,
+        30,'#f39c12',4
+      );
+      this.reloadCurrentLevel();
+      return;
+    }
+    this.state = 'DEAD';
+    this.shakeTimer = 0.4;
+    this.shakeIntensity = 8;
+    const head = this.snake[0];
+    this.particles.burst(
+      this.offsetX+head.x*this.cellSize+this.cellSize/2,
+      this.offsetY+head.y*this.cellSize+this.cellSize/2,
+      40,'#e74c3c',5
+    );
+    setTimeout(()=>{
+      document.getElementById('death-msg').textContent = reason||'The dungeon claims another soul...';
+      document.getElementById('death-overlay').classList.add('active');
+    },800);
+  }
+
+  victory() {
+    this.state = 'VICTORY';
+    document.getElementById('final-score').textContent = `Final Score: ${this.score}`;
+    this.particles.burst(this.canvas.width/2,this.canvas.height/2,60,'#f39c12',6);
+    this.particles.burst(this.canvas.width/2,this.canvas.height/2,40,'#e74c3c',5);
+    this.particles.burst(this.canvas.width/2,this.canvas.height/2,40,'#3498db',5);
+    document.getElementById('victory-overlay').classList.add('active');
+  }
+
+  // ---- LEVEL LOADING ----
+  loadLevel(idx) {
+    if(idx >= LEVELS.length) { this.victory(); return; }
+    this.currentLevel = idx;
+    this.state = 'PLAYING';
+    const lvl = LEVELS[idx];
+    this.calculateLayout();
+
+    // Init snake
+    this.snake = [];
+    const dirs = {right:{x:-1,y:0},left:{x:1,y:0},up:{x:0,y:1},down:{x:0,y:-1}};
+    const d = dirs[lvl.startDir||'right'];
+    for(let i=0;i<lvl.startLength;i++) {
+      this.snake.push({x:lvl.startPos.x+d.x*i, y:lvl.startPos.y+d.y*i});
+    }
+    this.direction = lvl.startDir||'right';
+    this.nextDirection = null;
+    this.prevSnake = this.snake.map(s=>({...s}));
+    this.moveProgress = 1;
+
+    // Init apples
+    this.apples = lvl.apples.map(a=>({...a,collected:false}));
+    this.applesCollected = 0;
+    this.visibleAppleIndex = 0;
+    this.pendingGrowth = 0;
+
+    // Timers
+    this.moveTimer = 0;
+    this.projectiles = [];
+    this.turretTimers = lvl.turrets.map(t=>({elapsed:0,fireRate:t.fireRate}));
+
+    // Reset per-level charges
+    this.chargesUsed = {};
+    this.portals = [];
+    this.portalMode = false;
+    this.safePathTiles = [];
+    this.safePathTimer = 0;
+    this.venomousTrailTiles = [];
+    this.venomousTrailActive = false;
+    this.venomousTrailTimer = 0;
+    this.timeDilationActive = false;
+    this.invincibleActive = false;
+    this.invincibleTimer = 0;
+    this.futureSightActive = false;
+    this.futureSightTimer = 0;
+    this.appleCounter = 0;
+
+    // Disable turrets via turret hack
+    this.disabledTurrets = new Set();
+    const hackVal = this.getUpgradeValue('turret_hack');
+    if(hackVal && lvl.turrets.length) {
+      const indices = lvl.turrets.map((_,i)=>i);
+      for(let i=indices.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [indices[i],indices[j]]=[indices[j],indices[i]]; }
+      for(let i=0;i<Math.min(hackVal,lvl.turrets.length);i++) this.disabledTurrets.add(indices[i]);
+    }
+
+    // Speed
+    this.baseMoveInterval = 150;
+    const speedVal = this.getUpgradeValue('speed_boost');
+    if(speedVal) this.baseMoveInterval = Math.max(60, 150 * (1 - speedVal/100));
+    this.moveInterval = this.baseMoveInterval;
+
+    // Announce
+    this.levelAnnounceTimer = 1.5;
+    const announceEl = document.getElementById('level-announce');
+    announceEl.textContent = `Level ${idx+1}`;
+    announceEl.style.opacity = '1';
+
+    // Update HUD
+    this.updateHUD();
+    this.lastTime = performance.now();
+  }
+
+  reloadCurrentLevel() {
+    const idx = this.currentLevel;
+    const lvl = LEVELS[idx];
+    this.snake = [];
+    const dirs = {right:{x:-1,y:0},left:{x:1,y:0},up:{x:0,y:1},down:{x:0,y:-1}};
+    const d = dirs[lvl.startDir||'right'];
+    for(let i=0;i<lvl.startLength;i++) this.snake.push({x:lvl.startPos.x+d.x*i, y:lvl.startPos.y+d.y*i});
+    this.direction = lvl.startDir||'right';
+    this.nextDirection = null;
+    this.prevSnake = this.snake.map(s=>({...s}));
+    this.moveProgress = 1;
+    this.apples = lvl.apples.map(a=>({...a,collected:false}));
+    this.applesCollected = 0;
+    this.visibleAppleIndex = 0;
+    this.pendingGrowth = 0;
+    this.moveTimer = 0;
+    this.projectiles = [];
+    this.turretTimers = lvl.turrets.map(t=>({elapsed:0,fireRate:t.fireRate}));
+    this.portals = [];
+    this.portalMode = false;
+    this.safePathTiles = [];
+    this.safePathTimer = 0;
+    this.venomousTrailTiles = [];
+    this.venomousTrailActive = false;
+    this.venomousTrailTimer = 0;
+    this.chargesUsed = {};
+    this.appleCounter = 0;
+    this.state = 'PLAYING';
+    this.lastTime = performance.now();
+    this.updateHUD();
+  }
+
+  // ---- UPGRADE SYSTEM ----
+  hasUpgrade(id) { return !!this.upgrades[id]; }
+
+  getUpgradeValue(id) {
+    if(!this.upgrades[id]) return 0;
+    const def = UPGRADE_POOL.find(u=>u.id===id);
+    const stacks = this.upgradeStacks[id]||1;
+    return def.baseVal + def.stackVal*(stacks-1);
+  }
+
+  getChargesLeft(id) {
+    const val = this.getUpgradeValue(id);
+    return Math.max(0, val - (this.chargesUsed[id]||0));
+  }
+
+  showUpgradeChoice() {
+    this.state = 'UPGRADE';
+    const available = UPGRADE_POOL.filter(u => {
+      if(this.upgradeStacks[u.id]>=u.maxStacks) return false;
+      return true;
+    });
+
+    // Weighted selection: early = more defensive, late = more offensive
+    const lvl = this.currentLevel;
+    const weighted = available.map(u => {
+      let w = 1;
+      if(lvl<8 && (u.cat==='defensive'||u.cat==='growth')) w=2;
+      if(lvl>=12 && (u.cat==='offensive'||u.cat==='tactical')) w=2;
+      return {upgrade:u, weight:w};
+    });
+
+    const picks = [];
+    const pool = [...weighted];
+    for(let i=0;i<3&&pool.length;i++) {
+      const total = pool.reduce((s,w)=>s+w.weight,0);
+      let r = Math.random()*total;
+      for(let j=0;j<pool.length;j++) {
+        r -= pool[j].weight;
+        if(r<=0) { picks.push(pool[j].upgrade); pool.splice(j,1); break; }
+      }
+    }
+
+    const container = document.getElementById('upgrade-cards');
+    container.innerHTML = '';
+    picks.forEach(u => {
+      const currentStacks = this.upgradeStacks[u.id]||0;
+      const nextVal = u.baseVal + u.stackVal*currentStacks;
+      const card = document.createElement('div');
+      card.className = 'upgrade-card';
+      const activationHint = u.type==='active' ? '⌨️ Press [Space] to activate' :
+        u.type==='passive' ? '⚙️ Always active' : '';
+      card.innerHTML = `
+        <div class="icon">${u.icon}</div>
+        <div class="name">${u.name}</div>
+        <div class="desc">${u.desc.replace('{v}',nextVal)}</div>
+        <div class="activation">${activationHint}</div>
+        ${currentStacks?`<div class="stack">Stack ${currentStacks+1}/${u.maxStacks}</div>`:''}
+      `;
+      card.onclick = () => this.selectUpgrade(u.id);
+      container.appendChild(card);
+    });
+    document.getElementById('upgrade-overlay').classList.add('active');
+  }
+
+  selectUpgrade(id) {
+    if(!this.upgrades[id]) {
+      this.upgrades[id] = true;
+      this.upgradeStacks[id] = 1;
+    } else {
+      this.upgradeStacks[id]++;
+    }
+    const def = UPGRADE_POOL.find(u=>u.id===id);
+    if(def.cooldown && !this.cooldowns[id]) this.cooldowns[id] = {remaining:0, total:def.cooldown};
+
+    document.getElementById('upgrade-overlay').classList.remove('active');
+    this.loadLevel(this.currentLevel + 1);
+  }
+
+  useAbility() {
+    // Priority: invincibility > time dilation > dash > future sight > shrink > portal > safe path > venomous trail
+    const abilities = ['invincible','time_dilation','dash','future_sight','shrink','portal','safe_path','venomous_trail'];
+    for(const id of abilities) {
+      if(!this.hasUpgrade(id)) continue;
+      const def = UPGRADE_POOL.find(u=>u.id===id);
+
+      if(def.cooldown) {
+        const cd = this.cooldowns[id];
+        if(cd && cd.remaining > 0) continue;
+      }
+      if(def.resetsPerLevel && id!=='turret_hack') {
+        if(this.getChargesLeft(id)<=0) continue;
+      }
+
+      // Activate
+      if(id==='time_dilation') {
+        this.timeDilationActive = true;
+        this.timeDilationTimer = this.getUpgradeValue(id);
+        this.cooldowns[id].remaining = this.cooldowns[id].total;
+        return;
+      }
+      if(id==='invincible') {
+        this.invincibleActive = true;
+        this.invincibleTimer = this.getUpgradeValue(id);
+        this.cooldowns[id].remaining = this.cooldowns[id].total;
+        return;
+      }
+      if(id==='dash') {
+        this.chargesUsed[id] = (this.chargesUsed[id]||0)+1;
+        const dir = this.direction;
+        const delta = {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}[dir];
+        for(let i=0;i<3;i++) {
+          const nx = this.snake[0].x+delta.x;
+          const ny = this.snake[0].y+delta.y;
+          const lvl = LEVELS[this.currentLevel];
+          if(nx<0||ny<0||nx>=lvl.boardSize.w||ny>=lvl.boardSize.h) break;
+          this.snake.unshift({x:nx,y:ny});
+          this.snake.pop();
+        }
+        this.particles.burst(
+          this.offsetX+this.snake[0].x*this.cellSize+this.cellSize/2,
+          this.offsetY+this.snake[0].y*this.cellSize+this.cellSize/2,
+          10,'#3498db',2
+        );
+        return;
+      }
+      if(id==='future_sight') {
+        this.futureSightActive = true;
+        this.futureSightTimer = this.getUpgradeValue(id);
+        this.cooldowns[id].remaining = this.cooldowns[id].total;
+        return;
+      }
+      if(id==='shrink') {
+        if(this.snake.length>3) {
+          this.chargesUsed[id] = (this.chargesUsed[id]||0)+1;
+          const removed = Math.min(3, this.snake.length-3);
+          for(let i=0;i<removed;i++) {
+            const seg = this.snake.pop();
+            this.particles.burst(
+              this.offsetX+seg.x*this.cellSize+this.cellSize/2,
+              this.offsetY+seg.y*this.cellSize+this.cellSize/2,
+              5,'#2ecc71',2
+            );
+          }
+        }
+        return;
+      }
+      if(id==='portal') {
+        this.portalMode = true;
+        return;
+      }
+      if(id==='safe_path') {
+        this.chargesUsed[id] = (this.chargesUsed[id]||0)+1;
+        this.showSafePath();
+        return;
+      }
+      if(id==='venomous_trail') {
+        this.venomousTrailActive = true;
+        this.venomousTrailTimer = this.getUpgradeValue(id);
+        this.cooldowns[id].remaining = this.cooldowns[id].total;
+        return;
+      }
+    }
+  }
+
+  showSafePath() {
+    // Only target the currently visible apple
+    const visible = [];
+    const extraVision = this.getUpgradeValue('detector');
+    const visibleCount = 1 + extraVision;
+    let count = 0;
+    for(let i=this.visibleAppleIndex; i<this.apples.length && count<visibleCount; i++) {
+      if(this.apples[i].collected) continue;
+      visible.push(this.apples[i]);
+      count++;
+    }
+    if(!visible.length) return;
+    let nearest = visible[0], minDist = Infinity;
+    const head = this.snake[0];
+    for(const a of visible) {
+      const d = Math.abs(a.x-head.x)+Math.abs(a.y-head.y);
+      if(d<minDist) { minDist=d; nearest=a; }
+    }
+    // Simple BFS path
+    const lvl = LEVELS[this.currentLevel];
+    const grid = Array.from({length:lvl.boardSize.h},()=>Array(lvl.boardSize.w).fill(false));
+    for(const b of lvl.barriers) grid[b.y][b.x]=true;
+    const visited = Array.from({length:lvl.boardSize.h},()=>Array(lvl.boardSize.w).fill(false));
+    const queue = [{x:head.x,y:head.y,path:[]}];
+    visited[head.y][head.x]=true;
+    this.safePathTiles = [];
+    while(queue.length) {
+      const cur = queue.shift();
+      if(cur.x===nearest.x&&cur.y===nearest.y) { this.safePathTiles=cur.path; break; }
+      for(const[dx,dy]of[[0,-1],[0,1],[-1,0],[1,0]]) {
+        const nx=cur.x+dx, ny=cur.y+dy;
+        if(nx<0||ny<0||nx>=lvl.boardSize.w||ny>=lvl.boardSize.h) continue;
+        if(visited[ny][nx]||grid[ny][nx]) continue;
+        visited[ny][nx]=true;
+        queue.push({x:nx,y:ny,path:[...cur.path,{x:nx,y:ny}]});
+      }
+    }
+    this.safePathTimer = 3;
+  }
+
+  // ---- UPDATE ----
+  update(dt) {
+    if(this.state==='LEVEL_CLEAR') {
+      this.particles.update(dt);
+      this.lavaAnimTime += dt;
+      this.levelClearTimer -= dt;
+      if(this.levelClearTimer<=0) {
+        document.getElementById('levelclear-overlay').classList.remove('active');
+        if(this.currentLevel >= LEVELS.length-1) {
+          this.victory();
+        } else {
+          this.showUpgradeChoice();
+        }
+      }
+      return;
+    }
+    if(this.state!=='PLAYING') {
+      this.particles.update(dt);
+      return;
+    }
+
+    const timeScale = this.timeDilationActive ? 0.3 : 1;
+    const scaledDt = dt * timeScale;
+
+    this.lavaAnimTime += dt;
+
+    // Level announce
+    if(this.levelAnnounceTimer>0) {
+      this.levelAnnounceTimer -= dt;
+      if(this.levelAnnounceTimer<=0) {
+        document.getElementById('level-announce').style.opacity='0';
+      }
+    }
+
+    // Screen shake
+    if(this.shakeTimer>0) this.shakeTimer -= dt;
+
+    // Cooldowns
+    for(const id in this.cooldowns) {
+      if(this.cooldowns[id].remaining>0) this.cooldowns[id].remaining -= dt*1000;
+    }
+
+    // Timed abilities
+    if(this.timeDilationActive) {
+      this.timeDilationTimer -= dt;
+      if(this.timeDilationTimer<=0) this.timeDilationActive=false;
+    }
+    if(this.invincibleActive) {
+      this.invincibleTimer -= dt;
+      if(this.invincibleTimer<=0) this.invincibleActive=false;
+    }
+    if(this.futureSightActive) {
+      this.futureSightTimer -= dt;
+      if(this.futureSightTimer<=0) this.futureSightActive=false;
+    }
+    if(this.venomousTrailActive) {
+      this.venomousTrailTimer -= dt;
+      if(this.venomousTrailTimer<=0) this.venomousTrailActive=false;
+    }
+    if(this.safePathTimer>0) {
+      this.safePathTimer -= dt;
+      if(this.safePathTimer<=0) this.safePathTiles=[];
+    }
+
+    // Venomous trail decay
+    this.venomousTrailTiles = this.venomousTrailTiles.filter(t=>{t.life-=dt; return t.life>0;});
+
+    // Snake movement with interpolation
+    this.moveTimer += scaledDt * 1000;
+    this.moveProgress = Math.min(1, this.moveTimer / this.moveInterval);
+    if(this.moveTimer >= this.moveInterval) {
+      this.moveTimer = 0;
+      this.moveProgress = 0;
+      this.prevSnake = this.snake.map(s=>({...s}));
+      this.moveSnake();
+    }
+
+    // Turret firing
+    const lvl = LEVELS[this.currentLevel];
+    lvl.turrets.forEach((t,i) => {
+      if(this.disabledTurrets.has(i)) return;
+      this.turretTimers[i].elapsed += scaledDt*1000;
+      if(this.turretTimers[i].elapsed >= t.fireRate) {
+        this.turretTimers[i].elapsed = 0;
+        this.fireProjectile(t);
+      }
+    });
+
+    // Projectile movement
+    for(let i=this.projectiles.length-1;i>=0;i--) {
+      const p = this.projectiles[i];
+      p.x += p.vx * scaledDt * p.speed;
+      p.y += p.vy * scaledDt * p.speed;
+
+      // Check bounds
+      if(p.x<-1||p.y<-1||p.x>lvl.boardSize.w||p.y>lvl.boardSize.h) {
+        this.projectiles.splice(i,1);
+        continue;
+      }
+
+      // Check collision with snake
+      const px = Math.round(p.x), py = Math.round(p.y);
+      for(const seg of this.snake) {
+        if(seg.x===px && seg.y===py) {
+          if(this.invincibleActive) { this.projectiles.splice(i,1); break; }
+          // Deflector
+          const deflectChance = this.getUpgradeValue('deflector');
+          if(deflectChance && Math.random()*100 < deflectChance) {
+            p.vx = -p.vx; p.vy = -p.vy;
+            this.particles.burst(
+              this.offsetX+seg.x*this.cellSize+this.cellSize/2,
+              this.offsetY+seg.y*this.cellSize+this.cellSize/2,
+              5,'#3498db',2
+            );
+            break;
+          }
+          // Shield
+          const shield = this.getUpgradeValue('proj_shield');
+          if(shield) {
+            const used = this.chargesUsed['proj_shield']||0;
+            if(used < shield) {
+              this.chargesUsed['proj_shield'] = used+1;
+              this.projectiles.splice(i,1);
+              this.particles.burst(
+                this.offsetX+seg.x*this.cellSize+this.cellSize/2,
+                this.offsetY+seg.y*this.cellSize+this.cellSize/2,
+                8,'#3498db',2
+              );
+              break;
+            }
+          }
+          this.die('Hit by a projectile!');
+          return;
+        }
+      }
+    }
+
+    // Apple magnet - only collects visible apples
+    const magnetRange = this.getUpgradeValue('magnet');
+    if(magnetRange) {
+      const head = this.snake[0];
+      for(let ai=0;ai<this.apples.length;ai++) {
+        const a = this.apples[ai];
+        if(a.collected) continue;
+        if(!this.isAppleVisible(ai)) continue;
+        if(Math.abs(a.x-head.x)<=magnetRange && Math.abs(a.y-head.y)<=magnetRange) {
+          this.collectApple(a);
+        }
+      }
+    }
+
+    this.particles.update(dt);
+    this.updateHUD();
+  }
+
+  moveSnake() {
+    if(this.nextDirection) { this.direction = this.nextDirection; this.nextDirection = null; }
+
+    const head = {...this.snake[0]};
+    const delta = {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}[this.direction];
+    head.x += delta.x;
+    head.y += delta.y;
+
+    const lvl = LEVELS[this.currentLevel];
+
+    // Wall collision (wrap or die)
+    if(head.x<0||head.y<0||head.x>=lvl.boardSize.w||head.y>=lvl.boardSize.h) {
+      if(!this.invincibleActive) { this.die('Crashed into the dungeon wall!'); return; }
+      head.x = (head.x+lvl.boardSize.w)%lvl.boardSize.w;
+      head.y = (head.y+lvl.boardSize.h)%lvl.boardSize.h;
+    }
+
+    // Barrier collision
+    if(lvl.barriers.some(b=>b.x===head.x&&b.y===head.y)) {
+      if(this.invincibleActive) { /* pass */ }
+      else {
+        const phaseLeft = this.getChargesLeft('wall_phase');
+        if(phaseLeft>0) {
+          this.chargesUsed['wall_phase'] = (this.chargesUsed['wall_phase']||0)+1;
+          this.particles.burst(
+            this.offsetX+head.x*this.cellSize+this.cellSize/2,
+            this.offsetY+head.y*this.cellSize+this.cellSize/2,
+            8,'#9b59b6',2
+          );
+        } else {
+          this.die('Crushed by a stone wall!');
+          return;
+        }
+      }
+    }
+
+    // Lava collision
+    if(lvl.lava.some(l=>l.x===head.x&&l.y===head.y)) {
+      if(!this.invincibleActive) {
+        const lavaLeft = this.getUpgradeValue('lava_resist');
+        const used = this.chargesUsed['lava_resist']||0;
+        if(lavaLeft && used < lavaLeft) {
+          this.chargesUsed['lava_resist'] = used+1;
+          this.particles.burst(
+            this.offsetX+head.x*this.cellSize+this.cellSize/2,
+            this.offsetY+head.y*this.cellSize+this.cellSize/2,
+            8,'#e67e22',2
+          );
+        } else {
+          this.die('Burned in lava!');
+          return;
+        }
+      }
+    }
+
+    // Venomous trail collision
+    if(this.venomousTrailTiles.some(t=>t.x===head.x&&t.y===head.y)) {
+      if(!this.invincibleActive) {
+        const lavaLeft = this.getUpgradeValue('lava_resist');
+        const used = this.chargesUsed['lava_resist']||0;
+        if(lavaLeft && used < lavaLeft) {
+          this.chargesUsed['lava_resist'] = used+1;
+        } else {
+          this.die('Burned by your own venom!');
+          return;
+        }
+      }
+    }
+
+    // Self collision
+    const ghostTail = this.getUpgradeValue('ghost_tail');
+    for(let i=0;i<this.snake.length;i++) {
+      if(this.snake[i].x===head.x && this.snake[i].y===head.y) {
+        if(ghostTail && i >= this.snake.length - ghostTail) continue;
+        if(!this.invincibleActive) { this.die('Bit your own tail!'); return; }
+      }
+    }
+
+    // Portal check
+    for(let i=0;i<this.portals.length;i+=2) {
+      if(i+1>=this.portals.length) break;
+      const [a,b] = [this.portals[i], this.portals[i+1]];
+      if(head.x===a.x&&head.y===a.y) { head.x=b.x; head.y=b.y; this.portals.splice(i,2); break; }
+      if(head.x===b.x&&head.y===b.y) { head.x=a.x; head.y=a.y; this.portals.splice(i,2); break; }
+    }
+
+    // Add venomous trail from old tail
+    if(this.venomousTrailActive && this.snake.length>1) {
+      const tail = this.snake[this.snake.length-1];
+      this.venomousTrailTiles.push({x:tail.x,y:tail.y,life:this.getUpgradeValue('venomous_trail')});
+    }
+
+    this.snake.unshift(head);
+
+    // Apple collection - only visible apples can be collected
+    for(let ai=0;ai<this.apples.length;ai++) {
+      const a = this.apples[ai];
+      if(!a.collected && a.x===head.x && a.y===head.y && this.isAppleVisible(ai)) {
+        this.collectApple(a);
+        break;
+      }
+    }
+
+    // Growth: keep tail if pending, otherwise remove
+    if(this.pendingGrowth > 0) {
+      this.pendingGrowth--;
+    } else {
+      this.snake.pop();
+    }
+
+    // Check level complete
+    if(this.apples.every(a=>a.collected)) {
+      this.state = 'LEVEL_CLEAR';
+      this.levelClearTimer = 1.8;
+      this.moveProgress = 1;
+      this.prevSnake = this.snake.map(s=>({...s}));
+      this.particles.burst(
+        this.offsetX+head.x*this.cellSize+this.cellSize/2,
+        this.offsetY+head.y*this.cellSize+this.cellSize/2,
+        30,'#f39c12',4
+      );
+      this.particles.burst(
+        this.offsetX+head.x*this.cellSize+this.cellSize/2,
+        this.offsetY+head.y*this.cellSize+this.cellSize/2,
+        20,'#2ecc71',3
+      );
+      document.getElementById('levelclear-overlay').classList.add('active');
+      document.getElementById('levelclear-msg').textContent = `Score: ${this.score}`;
+    }
+  }
+
+  isAppleVisible(appleIndex) {
+    const extraVision = this.getUpgradeValue('detector');
+    const visibleCount = 1 + extraVision;
+    let count = 0;
+    for(let i=this.visibleAppleIndex; i<this.apples.length; i++) {
+      if(this.apples[i].collected) continue;
+      if(i === appleIndex) return count < visibleCount;
+      count++;
+      if(count >= visibleCount) return false;
+    }
+    return false;
+  }
+
+  collectApple(a) {
+    a.collected = true;
+    this.applesCollected++;
+    this.appleCounter++;
+    // Advance to next uncollected apple
+    while(this.visibleAppleIndex < this.apples.length && this.apples[this.visibleAppleIndex].collected) {
+      this.visibleAppleIndex++;
+    }
+
+    if(this.shouldGrow()) {
+      this.pendingGrowth++;
+    }
+
+    // Score
+    let pts = 100;
+    const appleVal = this.getUpgradeValue('apple_value');
+    if(appleVal) pts *= appleVal;
+    const scoreMul = this.getUpgradeValue('score_multi');
+    if(scoreMul) pts *= scoreMul;
+    this.score += Math.round(pts);
+
+    // Particles
+    this.particles.burst(
+      this.offsetX+a.x*this.cellSize+this.cellSize/2,
+      this.offsetY+a.y*this.cellSize+this.cellSize/2,
+      12,'#e74c3c',2
+    );
+  }
+
+  shouldGrow() {
+    const selGrowth = this.getUpgradeValue('selective_growth');
+    if(selGrowth && (this.appleCounter % selGrowth === 0)) return false;
+    return true;
+  }
+
+  fireProjectile(turret) {
+    const dirVec = {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}[turret.dir];
+    this.projectiles.push({
+      x: turret.x + dirVec.x*0.5,
+      y: turret.y + dirVec.y*0.5,
+      vx: dirVec.x,
+      vy: dirVec.y,
+      speed: turret.speed||4
+    });
+  }
+
+  updateHUD() {
+    document.getElementById('hud-level').textContent = this.currentLevel+1;
+    const lvl = LEVELS[this.currentLevel];
+    document.getElementById('hud-apples').textContent = `${this.applesCollected}/${lvl?lvl.apples.length:0}`;
+    document.getElementById('hud-score').textContent = this.score;
+
+    // Charges display
+    const charges = [];
+    if(this.hasUpgrade('proj_shield')) {
+      const left = this.getUpgradeValue('proj_shield')-(this.chargesUsed['proj_shield']||0);
+      charges.push(`🛡${left}`);
+    }
+    if(this.hasUpgrade('lava_resist')) {
+      const left = this.getUpgradeValue('lava_resist')-(this.chargesUsed['lava_resist']||0);
+      charges.push(`🔥${left}`);
+    }
+    if(this.hasUpgrade('wall_phase')) charges.push(`🌀${this.getChargesLeft('wall_phase')}`);
+    if(this.hasUpgrade('dash')) charges.push(`💨${this.getChargesLeft('dash')}`);
+    if(this.hasUpgrade('second_chance')) {
+      const left = this.getUpgradeValue('second_chance')-this.secondChanceUsed;
+      charges.push(`🔄${left}`);
+    }
+    document.getElementById('hud-charges').textContent = charges.join(' ');
+
+    // Ability hint
+    const abilityHints = [];
+    const activeAbilities = ['invincible','time_dilation','dash','future_sight','shrink','portal','safe_path','venomous_trail'];
+    for(const id of activeAbilities) {
+      if(!this.hasUpgrade(id)) continue;
+      const def = UPGRADE_POOL.find(u=>u.id===id);
+      const cd = this.cooldowns[id];
+      const ready = !cd || cd.remaining<=0;
+      const hasCharges = !def.resetsPerLevel || id==='turret_hack' || this.getChargesLeft(id)>0;
+      if(ready && hasCharges) { abilityHints.push(`[Space] ${def.icon} ${def.name}`); break; }
+    }
+    document.getElementById('ability-hint').textContent = abilityHints.join('  |  ');
+
+    // Active upgrades icons
+    const container = document.getElementById('active-upgrades');
+    container.innerHTML = '';
+    for(const id in this.upgrades) {
+      const def = UPGRADE_POOL.find(u=>u.id===id);
+      const div = document.createElement('div');
+      div.className = 'upgrade-icon';
+      div.title = def.name;
+      div.textContent = def.icon;
+      if(def.cooldown && this.cooldowns[id]) {
+        const cd = this.cooldowns[id];
+        if(cd.remaining>0) {
+          const overlay = document.createElement('div');
+          overlay.className = 'cooldown-overlay';
+          overlay.textContent = Math.ceil(cd.remaining/1000);
+          div.appendChild(overlay);
+        }
+      }
+      container.appendChild(div);
+    }
+  }
+
+  // ---- RENDER ----
+  render() {
+    const ctx = this.ctx;
+    const w = this.canvas.width, h = this.canvas.height;
+    ctx.fillStyle='#0a0a0a';
+    ctx.fillRect(0,0,w,h);
+
+    if(this.state==='MENU') return;
+
+    // Screen shake
+    let shakeX=0, shakeY=0;
+    if(this.shakeTimer>0) {
+      shakeX = (Math.random()-0.5)*this.shakeIntensity*2;
+      shakeY = (Math.random()-0.5)*this.shakeIntensity*2;
+    }
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    if(this.currentLevel < LEVELS.length) {
+      const lvl = LEVELS[this.currentLevel];
+      const cs = this.cellSize;
+      const ox = this.offsetX, oy = this.offsetY;
+
+      // Board background
+      ctx.fillStyle='#1a1a1a';
+      ctx.fillRect(ox,oy,lvl.boardSize.w*cs,lvl.boardSize.h*cs);
+
+      // Grid lines
+      ctx.strokeStyle='#222';
+      ctx.lineWidth=0.5;
+      for(let x=0;x<=lvl.boardSize.w;x++) {
+        ctx.beginPath(); ctx.moveTo(ox+x*cs,oy); ctx.lineTo(ox+x*cs,oy+lvl.boardSize.h*cs); ctx.stroke();
+      }
+      for(let y=0;y<=lvl.boardSize.h;y++) {
+        ctx.beginPath(); ctx.moveTo(ox,oy+y*cs); ctx.lineTo(ox+lvl.boardSize.w*cs,oy+y*cs); ctx.stroke();
+      }
+
+      // Board border
+      ctx.strokeStyle='#4a4a4a';
+      ctx.lineWidth=2;
+      ctx.strokeRect(ox,oy,lvl.boardSize.w*cs,lvl.boardSize.h*cs);
+
+      // Safe path
+      if(this.safePathTiles.length) {
+        ctx.fillStyle='rgba(46,204,113,0.15)';
+        for(const t of this.safePathTiles) ctx.fillRect(ox+t.x*cs,oy+t.y*cs,cs,cs);
+      }
+
+      // Portals
+      for(const p of this.portals) {
+        const pulse = Math.sin(this.lavaAnimTime*4)*0.2+0.5;
+        ctx.fillStyle=`rgba(155,89,182,${pulse})`;
+        ctx.beginPath();
+        ctx.arc(ox+p.x*cs+cs/2, oy+p.y*cs+cs/2, cs/2.5, 0, Math.PI*2);
+        ctx.fill();
+      }
+
+      // Barriers
+      for(const b of lvl.barriers) {
+        const grd = ctx.createLinearGradient(ox+b.x*cs,oy+b.y*cs,ox+b.x*cs+cs,oy+b.y*cs+cs);
+        grd.addColorStop(0,'#3a3a3a');
+        grd.addColorStop(1,'#4a4a4a');
+        ctx.fillStyle = grd;
+        ctx.fillRect(ox+b.x*cs+1,oy+b.y*cs+1,cs-2,cs-2);
+        // Brick lines
+        ctx.strokeStyle='#2d2d2d';
+        ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.moveTo(ox+b.x*cs+1,oy+b.y*cs+cs/2);
+        ctx.lineTo(ox+b.x*cs+cs-1,oy+b.y*cs+cs/2);
+        ctx.moveTo(ox+b.x*cs+cs/2,oy+b.y*cs+1);
+        ctx.lineTo(ox+b.x*cs+cs/2,oy+b.y*cs+cs/2);
+        ctx.stroke();
+      }
+
+      // Lava
+      for(const l of lvl.lava) {
+        const pulse = Math.sin(this.lavaAnimTime*3+l.x*0.5+l.y*0.7)*0.3+0.7;
+        const grd = ctx.createRadialGradient(
+          ox+l.x*cs+cs/2, oy+l.y*cs+cs/2, 0,
+          ox+l.x*cs+cs/2, oy+l.y*cs+cs/2, cs/1.5
+        );
+        grd.addColorStop(0,`rgba(231,76,60,${pulse})`);
+        grd.addColorStop(0.5,`rgba(230,126,34,${pulse*0.8})`);
+        grd.addColorStop(1,`rgba(211,84,0,${pulse*0.4})`);
+        ctx.fillStyle=grd;
+        ctx.fillRect(ox+l.x*cs,oy+l.y*cs,cs,cs);
+      }
+
+      // Venomous trail
+      for(const t of this.venomousTrailTiles) {
+        const alpha = Math.min(1,t.life)*0.5;
+        ctx.fillStyle=`rgba(155,89,182,${alpha})`;
+        ctx.fillRect(ox+t.x*cs+2,oy+t.y*cs+2,cs-4,cs-4);
+      }
+
+      // Turrets
+      lvl.turrets.forEach((t,i) => {
+        const disabled = this.disabledTurrets.has(i);
+        ctx.fillStyle = disabled ? '#555' : '#8e44ad';
+        ctx.fillRect(ox+t.x*cs+2,oy+t.y*cs+2,cs-4,cs-4);
+        // Direction indicator
+        if(!disabled) {
+          ctx.fillStyle='#e74c3c';
+          const cx=ox+t.x*cs+cs/2, cy=oy+t.y*cs+cs/2;
+          const dd={up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}[t.dir];
+          ctx.beginPath();
+          ctx.arc(cx+dd.x*cs/4, cy+dd.y*cs/4, cs/6, 0, Math.PI*2);
+          ctx.fill();
+        } else {
+          // Sparking effect
+          ctx.strokeStyle='#ff0';
+          ctx.lineWidth=1;
+          const cx=ox+t.x*cs+cs/2, cy=oy+t.y*cs+cs/2;
+          for(let s=0;s<3;s++) {
+            const a=Math.random()*Math.PI*2;
+            ctx.beginPath();
+            ctx.moveTo(cx,cy);
+            ctx.lineTo(cx+Math.cos(a)*cs/3,cy+Math.sin(a)*cs/3);
+            ctx.stroke();
+          }
+        }
+      });
+
+      // Apples - only show current target + extras from Apple Vision upgrade
+      const extraVision = this.getUpgradeValue('detector');
+      const visibleCount = 1 + extraVision;
+      let shown = 0;
+      for(let ai=this.visibleAppleIndex; ai<this.apples.length && shown<visibleCount; ai++) {
+        const a = this.apples[ai];
+        if(a.collected) continue;
+        shown++;
+        const isCurrent = (shown === 1);
+        // Extra apples from vision show dimmer
+        const appleAlpha = isCurrent ? 1 : 0.45;
+        ctx.globalAlpha = appleAlpha;
+        // Highlight ring on extra-vision apples
+        if(!isCurrent) {
+          ctx.strokeStyle='rgba(52,152,219,0.5)';
+          ctx.lineWidth=2;
+          ctx.strokeRect(ox+a.x*cs-2,oy+a.y*cs-2,cs+4,cs+4);
+        }
+        // Apple body
+        const grd = ctx.createRadialGradient(
+          ox+a.x*cs+cs*0.4, oy+a.y*cs+cs*0.3, cs*0.1,
+          ox+a.x*cs+cs/2, oy+a.y*cs+cs/2, cs*0.4
+        );
+        grd.addColorStop(0,'#e74c3c');
+        grd.addColorStop(1,'#c0392b');
+        ctx.fillStyle=grd;
+        ctx.beginPath();
+        ctx.arc(ox+a.x*cs+cs/2, oy+a.y*cs+cs/2, cs*0.35, 0, Math.PI*2);
+        ctx.fill();
+        // Stem
+        ctx.strokeStyle='#27ae60';
+        ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.moveTo(ox+a.x*cs+cs/2, oy+a.y*cs+cs*0.2);
+        ctx.lineTo(ox+a.x*cs+cs*0.6, oy+a.y*cs+cs*0.05);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // Snake with smooth interpolation and continuous body
+      const lerpT = this.moveProgress;
+      const ghostTail = this.getUpgradeValue('ghost_tail');
+      const snakeLen = this.snake.length;
+
+      // Pre-compute interpolated pixel positions for all segments
+      const segPos = this.snake.map((seg,i) => {
+        const prev = this.prevSnake[i] || seg;
+        return {
+          px: ox + (prev.x + (seg.x - prev.x) * lerpT) * cs + cs/2,
+          py: oy + (prev.y + (seg.y - prev.y) * lerpT) * cs + cs/2
+        };
+      });
+
+      // Draw body connections (thick lines between segments) - back to front
+      for(let i=snakeLen-1;i>=1;i--) {
+        const t = i/Math.max(1,snakeLen-1);
+        const isGhost = ghostTail && i >= snakeLen - ghostTail;
+        const radius = cs * (0.38 - t*0.08); // tapers toward tail
+
+        let r,g,b;
+        if(this.invincibleActive) { r=243; g=156; b=18; }
+        else { r=Math.round(46+(39-46)*t); g=Math.round(204+(174-204)*t); b=Math.round(113+(96-113)*t); }
+
+        ctx.globalAlpha = isGhost ? 0.35 : 1;
+        ctx.strokeStyle = `rgb(${r},${g},${b})`;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = radius * 2;
+        ctx.beginPath();
+        ctx.moveTo(segPos[i-1].px, segPos[i-1].py);
+        ctx.lineTo(segPos[i].px, segPos[i].py);
+        ctx.stroke();
+      }
+
+      // Draw circles at each joint for smoothness - back to front
+      for(let i=snakeLen-1;i>=1;i--) {
+        const t = i/Math.max(1,snakeLen-1);
+        const isGhost = ghostTail && i >= snakeLen - ghostTail;
+        const radius = cs * (0.38 - t*0.08);
+
+        let r,g,b;
+        if(this.invincibleActive) { r=243; g=156; b=18; }
+        else { r=Math.round(46+(39-46)*t); g=Math.round(204+(174-204)*t); b=Math.round(113+(96-113)*t); }
+
+        ctx.globalAlpha = isGhost ? 0.35 : 1;
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.beginPath();
+        ctx.arc(segPos[i].px, segPos[i].py, radius, 0, Math.PI*2);
+        ctx.fill();
+      }
+
+      // Draw head
+      if(snakeLen > 0) {
+        ctx.globalAlpha = 1;
+        const hx = segPos[0].px, hy = segPos[0].py;
+        const headR = cs * 0.44;
+
+        if(this.invincibleActive) {
+          ctx.fillStyle = 'rgb(243,156,18)';
+        } else {
+          ctx.fillStyle = 'rgb(46,204,113)';
+        }
+        ctx.beginPath();
+        ctx.arc(hx, hy, headR, 0, Math.PI*2);
+        ctx.fill();
+
+        // Darker head overlay for depth
+        const headGrd = ctx.createRadialGradient(hx-headR*0.2,hy-headR*0.2,0,hx,hy,headR);
+        headGrd.addColorStop(0,'rgba(255,255,255,0.1)');
+        headGrd.addColorStop(1,'rgba(0,0,0,0.2)');
+        ctx.fillStyle = headGrd;
+        ctx.beginPath();
+        ctx.arc(hx, hy, headR, 0, Math.PI*2);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle='#fff';
+        const eyeOff = {up:{x1:-0.2,y1:-0.15,x2:0.2,y2:-0.15},down:{x1:-0.2,y1:0.15,x2:0.2,y2:0.15},left:{x1:-0.15,y1:-0.2,x2:-0.15,y2:0.2},right:{x1:0.15,y1:-0.2,x2:0.15,y2:0.2}}[this.direction];
+        ctx.beginPath(); ctx.arc(hx+eyeOff.x1*cs, hy+eyeOff.y1*cs, cs*0.09, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(hx+eyeOff.x2*cs, hy+eyeOff.y2*cs, cs*0.09, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='#111';
+        ctx.beginPath(); ctx.arc(hx+eyeOff.x1*cs*1.15, hy+eyeOff.y1*cs*1.15, cs*0.045, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(hx+eyeOff.x2*cs*1.15, hy+eyeOff.y2*cs*1.15, cs*0.045, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha=1;
+
+      // Invincibility aura (uses interpolated head position)
+      if(this.invincibleActive) {
+        const head = this.snake[0];
+        const prevH = this.prevSnake[0]||head;
+        const ihx = prevH.x+(head.x-prevH.x)*lerpT;
+        const ihy = prevH.y+(head.y-prevH.y)*lerpT;
+        ctx.strokeStyle = `rgba(243,156,18,${0.5+Math.sin(this.lavaAnimTime*6)*0.3})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(ox+ihx*cs+cs/2, oy+ihy*cs+cs/2, cs*0.6, 0, Math.PI*2);
+        ctx.stroke();
+      }
+
+      // Projectiles
+      for(const p of this.projectiles) {
+        const px = ox + p.x*cs + cs/2;
+        const py = oy + p.y*cs + cs/2;
+        const grd = ctx.createRadialGradient(px,py,0,px,py,cs*0.35);
+        grd.addColorStop(0,'#5dade2');
+        grd.addColorStop(1,'rgba(52,152,219,0.3)');
+        ctx.fillStyle=grd;
+        ctx.beginPath();
+        ctx.arc(px,py,cs*0.3,0,Math.PI*2);
+        ctx.fill();
+      }
+
+      // Future sight: show projected paths
+      if(this.futureSightActive) {
+        ctx.globalAlpha=0.3;
+        ctx.fillStyle='#5dade2';
+        for(const p of this.projectiles) {
+          for(let t=0;t<this.getUpgradeValue('future_sight')*p.speed;t++) {
+            const fx = p.x+p.vx*t;
+            const fy = p.y+p.vy*t;
+            if(fx<0||fy<0||fx>=lvl.boardSize.w||fy>=lvl.boardSize.h) break;
+            ctx.fillRect(ox+Math.round(fx)*cs+cs/3, oy+Math.round(fy)*cs+cs/3, cs/3, cs/3);
+          }
+        }
+        ctx.globalAlpha=1;
+      }
+    }
+
+    // Particles on top
+    this.particles.render(ctx);
+    ctx.restore();
+  }
+
+  // ---- GAME LOOP ----
+  gameLoop(timestamp) {
+    const dt = Math.min((timestamp - this.lastTime)/1000, 0.05);
+    this.lastTime = timestamp;
+
+    this.update(dt);
+    this.render();
+
+    requestAnimationFrame(this.gameLoop);
+  }
+}
+
+const game = new Game();
+</script>
+</body>
+</html>
