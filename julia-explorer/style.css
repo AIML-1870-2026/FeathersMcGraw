@@ -1,0 +1,454 @@
+/* === Reset & Base === */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-deep: #0a0a0f;
+  --bg-toolbar: #12121a;
+  --accent: #00ccaa;
+  --accent-dim: #00886a;
+  --accent-amber: #d4a020;
+  --text: #c0c8d0;
+  --text-dim: #606870;
+  --border: #1e1e2a;
+  --slider-track: #1a1a28;
+  --slider-thumb: #00ccaa;
+  --font-mono: 'IBM Plex Mono', 'Fira Mono', 'Courier New', monospace;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === Canvas Container === */
+#canvas-container {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 90px);
+  background: var(--bg-deep);
+  cursor: grab;
+  overflow: hidden;
+}
+
+#canvas-container:active {
+  cursor: grabbing;
+}
+
+#julia-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* === Coordinate Tooltip === */
+.tooltip {
+  position: absolute;
+  background: rgba(10, 10, 15, 0.9);
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  pointer-events: none;
+  white-space: nowrap;
+  border-radius: 2px;
+  transition: opacity 0.4s ease;
+  z-index: 10;
+}
+
+.tooltip.hidden {
+  opacity: 0;
+}
+
+.tooltip.visible {
+  opacity: 1;
+}
+
+/* === Mandelbrot Minimap === */
+#minimap-container {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 200px;
+  height: 220px;
+  border: 1px dashed var(--accent-dim);
+  background: rgba(10, 10, 15, 0.85);
+  box-shadow: 0 0 12px rgba(0, 204, 170, 0.1);
+  z-index: 5;
+  transition: opacity 0.3s ease;
+}
+
+#minimap-container.hidden {
+  display: none;
+}
+
+#mandelbrot-canvas {
+  display: block;
+  width: 200px;
+  height: 200px;
+  cursor: crosshair;
+}
+
+#minimap-crosshair {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 6px var(--accent);
+  z-index: 6;
+}
+
+.minimap-label {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-dim);
+  padding: 3px 0;
+  letter-spacing: 0.5px;
+}
+
+/* === Info Panel === */
+#info-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 280px;
+  background: rgba(10, 10, 15, 0.92);
+  border: 1px solid var(--accent-dim);
+  border-radius: 4px;
+  z-index: 8;
+  box-shadow: 0 0 16px rgba(0, 204, 170, 0.1);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+#info-panel.hidden {
+  display: none;
+}
+
+.info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.info-header button {
+  padding: 0 4px;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+}
+
+#info-content {
+  padding: 10px;
+  color: var(--text);
+}
+
+#info-content .info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+#info-content .info-label {
+  color: var(--text-dim);
+}
+
+#info-content .info-val {
+  color: var(--accent);
+}
+
+#info-content .info-desc {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+/* === Toolbar === */
+#toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 90px;
+  background: var(--bg-toolbar);
+  border-top: 1px solid var(--accent-dim);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  z-index: 20;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 50px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.toolbar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+#c-controls {
+  min-width: 260px;
+}
+
+.c-display {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.section-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+/* === Slider Rows === */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-row label {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 56px;
+  text-align: right;
+}
+
+.slider-row .slider-value {
+  font-size: 11px;
+  color: var(--text);
+  min-width: 44px;
+  text-align: left;
+}
+
+/* === Preset Buttons === */
+.preset-row {
+  display: flex;
+  gap: 4px;
+}
+
+.preset-btn {
+  font-size: 10px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.preset-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.preset-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* === Select Dropdown === */
+select {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 6px;
+  background: var(--slider-track);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  outline: none;
+  width: 120px;
+}
+
+select:hover {
+  border-color: var(--accent-dim);
+}
+
+select:focus {
+  border-color: var(--accent);
+}
+
+/* === Slider Tooltips === */
+#slider-tooltip {
+  position: fixed;
+  background: rgba(10, 10, 15, 0.95);
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  padding: 5px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 30;
+  box-shadow: 0 0 8px rgba(0, 204, 170, 0.15);
+}
+
+/* === Range Inputs === */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--slider-track);
+  border-radius: 2px;
+  outline: none;
+  width: 120px;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--slider-thumb);
+  border: 2px solid var(--bg-toolbar);
+  box-shadow: 0 0 4px rgba(0, 204, 170, 0.4);
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 8px rgba(0, 204, 170, 0.7);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--slider-thumb);
+  border: 2px solid var(--bg-toolbar);
+  box-shadow: 0 0 4px rgba(0, 204, 170, 0.4);
+  cursor: pointer;
+}
+
+/* === Buttons === */
+button {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--accent-dim);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+button:hover {
+  background: rgba(0, 204, 170, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 6px rgba(0, 204, 170, 0.2);
+}
+
+button.active {
+  background: rgba(0, 204, 170, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 204, 170, 0.3);
+}
+
+#utility-controls {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+#orbit-controls {
+  min-width: 180px;
+}
+
+#orbit-controls button {
+  align-self: flex-start;
+}
+
+/* === Responsive === */
+@media (max-width: 768px) {
+  #toolbar {
+    height: auto;
+    min-height: 90px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  #canvas-container {
+    height: calc(100vh - 160px);
+  }
+
+  .toolbar-divider {
+    display: none;
+  }
+
+  .toolbar-section {
+    flex-basis: 45%;
+  }
+
+  input[type="range"] {
+    width: 90px;
+  }
+
+  #minimap-container {
+    width: 140px;
+    height: 160px;
+  }
+
+  #mandelbrot-canvas {
+    width: 140px;
+    height: 140px;
+  }
+
+  #info-panel {
+    width: 220px;
+  }
+}
+
+@media (max-width: 480px) {
+  .toolbar-section {
+    flex-basis: 100%;
+  }
+
+  #minimap-container {
+    display: none;
+  }
+
+  #info-panel {
+    width: calc(100% - 24px);
+  }
+}

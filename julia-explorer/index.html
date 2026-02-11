@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Julia Set Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="julia-canvas"></canvas>
+    <div id="coord-tooltip" class="tooltip hidden"></div>
+    <div id="minimap-container" class="hidden">
+      <canvas id="mandelbrot-canvas" width="200" height="200"></canvas>
+      <div id="minimap-crosshair"></div>
+      <div class="minimap-label">Mandelbrot · click to set c</div>
+    </div>
+    <div id="info-panel" class="hidden">
+      <div class="info-header">Info <button id="info-close">&times;</button></div>
+      <div id="info-content"></div>
+    </div>
+  </div>
+
+  <div id="slider-tooltip"></div>
+  <div id="toolbar">
+    <div class="toolbar-section" id="c-controls">
+      <div class="c-display">c = <span id="c-value">-0.700 + 0.270i</span></div>
+      <div class="slider-row" data-tooltip="Adjust the real part of c — changes the fractal's horizontal symmetry and shape">
+        <label for="re-slider">Re(c)</label>
+        <input type="range" id="re-slider" min="-2" max="2" step="0.001" value="-0.7">
+        <span class="slider-value" id="re-value">-0.700</span>
+      </div>
+      <div class="slider-row" data-tooltip="Adjust the imaginary part of c — changes the fractal's vertical symmetry and shape">
+        <label for="im-slider">Im(c)</label>
+        <input type="range" id="im-slider" min="-2" max="2" step="0.001" value="0.27">
+        <span class="slider-value" id="im-value">0.270</span>
+      </div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-section" id="preset-controls">
+      <label class="section-label">Presets</label>
+      <div class="preset-row">
+        <button class="preset-btn" data-re="-0.75" data-im="0.11" title="Spiral pattern">Spiral</button>
+        <button class="preset-btn" data-re="0" data-im="1" title="Dendrite fractal">Dendrite</button>
+        <button class="preset-btn" data-re="-0.123" data-im="0.745" title="Douady Rabbit">Rabbit</button>
+      </div>
+      <div class="preset-row">
+        <button class="preset-btn" data-re="-0.75" data-im="0" title="San Marco basilica pattern">San Marco</button>
+        <button class="preset-btn" data-re="0.36" data-im="0.1" title="Dragon-like pattern">Dragons</button>
+        <button class="preset-btn" data-re="-0.8" data-im="0.156" title="Lightning fractal">Lightning</button>
+      </div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-section" id="iter-controls">
+      <div class="slider-row" data-tooltip="Max escape iterations — higher values reveal finer detail but render slower">
+        <label for="iter-slider">Iterations</label>
+        <input type="range" id="iter-slider" min="50" max="500" step="10" value="200">
+        <span class="slider-value" id="iter-value">200</span>
+      </div>
+      <div class="slider-row" data-tooltip="Change the color scheme used to render the fractal">
+        <label for="color-select">Colors</label>
+        <select id="color-select">
+          <option value="ocean">Ocean</option>
+          <option value="inferno">Inferno</option>
+          <option value="emerald">Emerald</option>
+          <option value="grayscale">Grayscale</option>
+          <option value="psychedelic">Psychedelic</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-section" id="orbit-controls">
+      <button id="orbit-toggle" title="Auto-orbit c around origin">&#9654; Orbit</button>
+      <div class="slider-row" data-tooltip="Orbit angular velocity — controls how fast c travels around its circular path">
+        <label for="speed-slider">Speed</label>
+        <input type="range" id="speed-slider" min="0.1" max="2.0" step="0.05" value="0.5">
+        <span class="slider-value" id="speed-value">0.50</span>
+      </div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-section" id="utility-controls">
+      <button id="reset-view" title="Reset zoom and pan">Reset View</button>
+      <button id="toggle-minimap" title="Toggle Mandelbrot minimap">Minimap</button>
+      <button id="save-image" title="Download the current fractal as a PNG">Save Image</button>
+      <button id="toggle-info" title="Show information about the current fractal">Info</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
