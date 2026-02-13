@@ -1,103 +1,70 @@
-import { useSimulation, MODEL_CONFIGS } from '../store/simulation';
+import { useSimulation } from '../store/simulation';
+import { getEngine } from './Canvas';
+import type { ColormapName } from '../types';
+
+const COLORMAPS: ColormapName[] = ['viridis', 'magma', 'inferno', 'plasma', 'grayscale'];
 
 export default function TopBar() {
-  const {
-    model, running, toggleRunning, audioEnabled, toggleAudio,
-    panels, togglePanel, setPanel,
-  } = useSimulation();
-
-  const config = MODEL_CONFIGS[model];
+  const { running, toggleRunning, colormap, setColormap, activeTool, setActiveTool, toggleParams, showParams } = useSimulation();
 
   return (
     <div className="glass absolute top-0 left-0 right-0 h-12 z-30 flex items-center px-4 gap-3">
-      {/* Logo */}
       <div className="flex items-center gap-2 shrink-0">
-        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan to-amber opacity-80" />
-        <span className="font-semibold text-sm tracking-wide text-white/90">Morphogen</span>
+        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-cyan to-amber opacity-80" />
+        <span className="font-semibold text-sm text-white/90">Morphogen</span>
       </div>
 
-      {/* Model name / param drawer toggle */}
       <button
-        onClick={() => togglePanel('paramDrawer')}
-        className="ml-4 px-3 py-1 rounded-md text-xs font-mono text-cyan hover:bg-white/5 transition-colors"
-        title="Toggle parameter drawer"
+        onClick={() => toggleParams()}
+        className="ml-4 px-3 py-1 rounded-md text-xs font-mono text-cyan hover:bg-white/5"
       >
-        {config.name}
-        <span className="ml-1 text-white/30">{panels.paramDrawer ? '▴' : '▾'}</span>
+        Gray-Scott {showParams ? '▴' : '▾'}
       </button>
 
       <div className="flex-1" />
 
+      {/* Tools */}
+      <div className="flex gap-1">
+        <button
+          onClick={() => setActiveTool('inject')}
+          className={`px-2 py-1 rounded text-xs ${activeTool === 'inject' ? 'bg-cyan/20 text-cyan' : 'text-white/50 hover:text-white/70'}`}
+        >
+          Inject
+        </button>
+        <button
+          onClick={() => setActiveTool('erase')}
+          className={`px-2 py-1 rounded text-xs ${activeTool === 'erase' ? 'bg-cyan/20 text-cyan' : 'text-white/50 hover:text-white/70'}`}
+        >
+          Erase
+        </button>
+      </div>
+
+      {/* Colormap */}
+      <select
+        value={colormap}
+        onChange={(e) => setColormap(e.target.value as ColormapName)}
+        className="bg-chrome/50 border border-glass-border rounded px-2 py-1 text-xs font-mono text-cyan"
+      >
+        {COLORMAPS.map((c) => (
+          <option key={c} value={c}>{c}</option>
+        ))}
+      </select>
+
       {/* Play/Pause */}
       <button
         onClick={toggleRunning}
-        className="px-3 py-1 rounded-md text-xs font-mono hover:bg-white/5 transition-colors"
-        title={running ? 'Pause (Space)' : 'Play (Space)'}
+        className="px-3 py-1 rounded-md text-xs font-mono hover:bg-white/5"
       >
-        {running ? '⏸ Pause' : '▶ Play'}
+        {running ? '⏸' : '▶'}
       </button>
 
-      {/* Presets */}
+      {/* Reset */}
       <button
-        onClick={() => togglePanel('presets')}
-        className={`px-3 py-1 rounded-md text-xs hover:bg-white/5 transition-colors ${panels.presets ? 'text-cyan' : 'text-white/70'}`}
-        title="Presets"
+        onClick={() => getEngine()?.resetState('center')}
+        className="px-3 py-1 rounded-md text-xs text-white/50 hover:bg-white/5"
+        title="Reset (R)"
       >
-        Presets
-      </button>
-
-      {/* Parameter Map */}
-      <button
-        onClick={() => togglePanel('paramMap')}
-        className={`px-3 py-1 rounded-md text-xs hover:bg-white/5 transition-colors ${panels.paramMap ? 'text-cyan' : 'text-white/70'}`}
-        title="Parameter Map (M)"
-      >
-        Map
-      </button>
-
-      {/* Timeline */}
-      <button
-        onClick={() => togglePanel('timeline')}
-        className={`px-3 py-1 rounded-md text-xs hover:bg-white/5 transition-colors ${panels.timeline ? 'text-cyan' : 'text-white/70'}`}
-        title="Timeline (T)"
-      >
-        Timeline
-      </button>
-
-      {/* Share */}
-      <button
-        onClick={() => setPanel('shareDialog', true)}
-        className="px-3 py-1 rounded-md text-xs text-white/70 hover:bg-white/5 transition-colors"
-        title="Share"
-      >
-        Share
-      </button>
-
-      {/* Settings / Colormap */}
-      <button
-        onClick={() => togglePanel('colormapSelector')}
-        className={`px-2 py-1 rounded-md text-sm hover:bg-white/5 transition-colors ${panels.colormapSelector ? 'text-cyan' : 'text-white/50'}`}
-        title="Settings"
-      >
-        ⚙
-      </button>
-
-      {/* Audio toggle */}
-      <button
-        onClick={toggleAudio}
-        className={`px-2 py-1 rounded-md text-sm hover:bg-white/5 transition-colors ${audioEnabled ? 'text-amber' : 'text-white/30'}`}
-        title="Toggle audio"
-      >
-        {audioEnabled ? '♪' : '♪'}
-      </button>
-
-      {/* Shortcuts help */}
-      <button
-        onClick={() => setPanel('shortcutOverlay', true)}
-        className="px-2 py-1 rounded-md text-xs text-white/30 hover:bg-white/5 transition-colors"
-        title="Keyboard shortcuts (?)"
-      >
-        ?
+        Reset
       </button>
     </div>
   );

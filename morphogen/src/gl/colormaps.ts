@@ -1,6 +1,5 @@
 import type { ColormapName } from '../types';
 
-// Each colormap is an array of [r, g, b] stops (0-255) sampled at even intervals
 type ColorStop = [number, number, number];
 
 const COLORMAP_DATA: Record<ColormapName, ColorStop[]> = {
@@ -23,22 +22,6 @@ const COLORMAP_DATA: Record<ColormapName, ColorStop[]> = {
     [13, 8, 135], [65, 4, 157], [106, 0, 168], [143, 13, 164],
     [175, 40, 146], [201, 67, 120], [222, 97, 93], [237, 130, 64],
     [246, 167, 34], [248, 207, 12], [240, 249, 33],
-  ],
-  twilight: [
-    [226, 217, 226], [166, 154, 196], [109, 109, 179], [75, 101, 174],
-    [56, 120, 168], [55, 141, 148], [71, 152, 117], [110, 153, 87],
-    [156, 147, 72], [197, 140, 75], [225, 146, 103], [233, 174, 157],
-    [226, 217, 226],
-  ],
-  bone: [
-    [0, 0, 0], [21, 21, 29], [42, 42, 58], [63, 63, 87],
-    [84, 84, 116], [107, 113, 137], [130, 143, 158], [153, 172, 179],
-    [179, 196, 200], [210, 224, 224], [255, 255, 255],
-  ],
-  bioluminescent: [
-    [2, 5, 15], [4, 20, 40], [6, 45, 65], [10, 80, 90],
-    [15, 120, 115], [25, 160, 140], [50, 195, 155], [100, 215, 150],
-    [170, 225, 130], [220, 210, 80], [255, 180, 20],
   ],
   grayscale: [
     [0, 0, 0], [28, 28, 28], [57, 57, 57], [85, 85, 85],
@@ -64,7 +47,6 @@ export function generateColormapTexture(gl: WebGL2RenderingContext, name: Colorm
   const stops = COLORMAP_DATA[name];
   const width = 256;
   const data = new Uint8Array(width * 4);
-
   for (let i = 0; i < width; i++) {
     const t = i / (width - 1);
     const [r, g, b] = interpolateColor(stops, t);
@@ -73,7 +55,6 @@ export function generateColormapTexture(gl: WebGL2RenderingContext, name: Colorm
     data[i * 4 + 2] = b;
     data[i * 4 + 3] = 255;
   }
-
   const texture = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
@@ -81,7 +62,6 @@ export function generateColormapTexture(gl: WebGL2RenderingContext, name: Colorm
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
   return texture;
 }
 
@@ -99,7 +79,3 @@ export function getColormapPreviewData(name: ColormapName): Uint8Array {
   }
   return data;
 }
-
-export const COLORMAP_NAMES: ColormapName[] = [
-  'viridis', 'magma', 'inferno', 'plasma', 'twilight', 'bone', 'bioluminescent', 'grayscale',
-];
