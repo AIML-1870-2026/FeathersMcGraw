@@ -138,7 +138,7 @@ export class CPUSimulationEngine {
 
   screenToUV(sx: number, sy: number): [number, number] {
     const r = this.canvas.getBoundingClientRect();
-    return [(sx - r.left) / r.width, 1 - (sy - r.top) / r.height];
+    return [(sx - r.left) / r.width, (sy - r.top) / r.height];
   }
 
   resize(w: number, h: number) { this.canvas.width = w; this.canvas.height = h; if (!this.running) this.renderToScreen(); }

@@ -257,7 +257,7 @@ export class SimulationEngine {
 
   screenToUV(screenX: number, screenY: number): [number, number] {
     const r = this.canvas.getBoundingClientRect();
-    return [(screenX - r.left) / r.width, 1.0 - (screenY - r.top) / r.height];
+    return [(screenX - r.left) / r.width, (screenY - r.top) / r.height];
   }
 
   resize(w: number, h: number) { this.canvas.width = w; this.canvas.height = h; if (!this.running) this.renderToScreen(); }
