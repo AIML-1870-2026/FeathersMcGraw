@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decision Neuron</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1a1408; --bg2: #231c0e; --bg3: #2e2514;
+    --text: #f5edd6; --muted: #a89872;
+    --green: #7cc440; --green-dim: #3a5520;
+    --red: #e05a3a; --red-dim: #6b2a1a;
+    --gold: #f0c34e; --blue: #e0b83a;
+    --radius: 10px; --sidebar-w: 260px;
+  }
+  body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; line-height: 1.5;
+    display: flex;
+  }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    width: var(--sidebar-w); min-width: var(--sidebar-w);
+    background: var(--bg2); border-right: 1px solid #3d321a;
+    display: flex; flex-direction: column;
+    height: 100vh; position: sticky; top: 0;
+    overflow-y: auto;
+  }
+  .sidebar-header {
+    padding: 20px 16px 12px; border-bottom: 1px solid #3d321a;
+  }
+  .sidebar-header h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px; }
+  .scenario-list { padding: 8px; flex: 1; }
+  .scenario-card {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg3); border: 2px solid transparent; border-radius: var(--radius);
+    padding: 10px 12px; cursor: pointer; transition: all .2s; margin-bottom: 6px;
+  }
+  .scenario-card:hover { border-color: var(--blue); }
+  .scenario-card.active { border-color: var(--gold); background: #3d321a; }
+  .scenario-card .emoji { font-size: 1.5rem; flex-shrink: 0; }
+  .scenario-card .sc-info { min-width: 0; }
+  .scenario-card .sc-name { font-weight: 600; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scenario-card .sc-question { font-size: 0.72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .sidebar-section {
+    border-top: 1px solid #3d321a; padding: 12px;
+  }
+  .sidebar-section h3 {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin-bottom: 8px; cursor: pointer; user-select: none;
+  }
+  .sidebar-section h3::before { content: '▸ '; }
+  .sidebar-section.open h3::before { content: '▾ '; }
+  .sidebar-section .section-body { display: none; }
+  .sidebar-section.open .section-body { display: block; }
+
+  .custom-form input {
+    background: var(--bg3); border: 1px solid #4a3d20; color: var(--text);
+    padding: 6px 8px; border-radius: 6px; font-size: 0.78rem; width: 100%;
+    margin-bottom: 4px;
+  }
+  .custom-form label { font-size: 0.72rem; color: var(--muted); display: block; margin: 6px 0 2px; }
+  .form-row { display: grid; grid-template-columns: 1fr 60px; gap: 4px; margin-bottom: 4px; }
+
+  /* ===== MAIN CONTENT ===== */
+  .main {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    height: 100vh; overflow-y: auto;
+  }
+  header {
+    padding: 16px 24px 6px;
+    border-bottom: 1px solid #3d321a;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 1.5rem; font-weight: 700; }
+  header p { color: var(--muted); font-style: italic; font-size: 0.85rem; margin-top: 2px; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 0; border-bottom: 1px solid #3d321a;
+    padding: 0 24px; flex-shrink: 0;
+  }
+  .tab-btn {
+    background: transparent; border: none; border-bottom: 2px solid transparent;
+    color: var(--muted); padding: 10px 20px; cursor: pointer;
+    font-size: 0.85rem; font-weight: 500; transition: all .2s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+  .tab-content { display: none; padding: 20px 24px; flex: 1; }
+  .tab-content.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: var(--bg2); border: 1px solid #3d321a; border-radius: var(--radius);
+    padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1.05rem; margin-bottom: 12px; font-weight: 600; }
+  .card h3 { font-size: 0.9rem; margin-bottom: 8px; color: var(--muted); font-weight: 500; }
+
+  /* Grids */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+  .grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+
+  /* Sliders */
+  .slider-group {
+    margin-bottom: 16px; background: var(--bg3); border-radius: 10px;
+    padding: 12px 14px 10px; border: 1px solid transparent;
+    transition: border-color .2s;
+  }
+  .slider-group:hover { border-color: #4a3d20; }
+  .slider-label {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px; font-size: 0.85rem;
+  }
+  .slider-label .name { font-weight: 500; flex: 1; }
+  .weight-tag {
+    font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;
+    margin: 0 8px;
+  }
+  .weight-tag.pos { background: var(--green-dim); color: var(--green); }
+  .weight-tag.neg { background: var(--red-dim); color: var(--red); }
+  .slider-val { font-weight: 600; min-width: 60px; text-align: right; font-size: 0.85rem; }
+  .slider-range-labels {
+    display: flex; justify-content: space-between; font-size: 0.7rem;
+    color: var(--muted); margin-top: 2px;
+  }
+  /* Importance row */
+  .importance-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid #3d321a;
+  }
+  .importance-row .imp-label {
+    font-size: 0.7rem; color: var(--muted); white-space: nowrap;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .importance-row input[type="range"] { flex: 1; height: 4px; }
+  .importance-dots {
+    display: flex; gap: 3px; align-items: center;
+  }
+  .importance-dots .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #4a3d20; transition: background .2s, box-shadow .2s;
+  }
+  .importance-dots .dot.filled-pos { background: var(--green); box-shadow: 0 0 4px var(--green); }
+  .importance-dots .dot.filled-neg { background: var(--red); box-shadow: 0 0 4px var(--red); }
+  .importance-row .imp-val {
+    font-size: 0.75rem; font-weight: 600; min-width: 28px; text-align: right;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none; width: 100%; height: 6px;
+    border-radius: 3px; background: var(--bg3); outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--blue); cursor: pointer;
+    border: 2px solid #fff;
+  }
+
+  /* Neuron display */
+  .neuron-display { text-align: center; }
+  .neuron-circle {
+    width: 110px; height: 110px; border-radius: 50%; margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.2rem; transition: all .4s ease;
+  }
+  .neuron-circle.yes {
+    background: radial-gradient(circle, var(--green) 0%, var(--green-dim) 100%);
+    box-shadow: 0 0 40px rgba(124,196,64,0.5);
+  }
+  .neuron-circle.no {
+    background: radial-gradient(circle, var(--red) 0%, var(--red-dim) 100%);
+    box-shadow: 0 0 40px rgba(224,90,58,0.5);
+  }
+  .neuron-circle.pulse { animation: pulse .5s ease; }
+  @keyframes pulse {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+  .prob-text { font-size: 1.8rem; font-weight: 700; margin-bottom: 2px; }
+  .decision-text { font-size: 1rem; margin-bottom: 12px; }
+
+  /* Confidence bar */
+  .conf-bar-wrap {
+    width: 100%; height: 12px; background: var(--bg3); border-radius: 6px;
+    overflow: hidden; margin-bottom: 14px; position: relative;
+  }
+  .conf-bar {
+    height: 100%; border-radius: 6px; transition: width .4s ease, background .4s ease;
+  }
+  .conf-bar-marker {
+    position: absolute; top: -3px; width: 2px; height: 18px; background: var(--gold);
+    left: 50%; transform: translateX(-50%); z-index: 1;
+  }
+
+  /* Math breakdown */
+  .math-breakdown { text-align: left; font-size: 0.8rem; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .math-breakdown .line { padding: 2px 0; color: var(--muted); }
+  .math-breakdown .line span { color: var(--text); }
+
+  /* Canvas */
+  canvas { border-radius: var(--radius); display: block; width: 100%; cursor: crosshair; background: var(--bg); }
+
+  /* Buttons */
+  .btn {
+    padding: 7px 16px; border-radius: 8px; border: none; cursor: pointer;
+    font-weight: 600; font-size: 0.82rem; transition: all .2s;
+  }
+  .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
+  .btn-blue { background: var(--blue); color: #fff; }
+  .btn-blue:hover { background: #c9a030; }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-green:hover { background: #5fa030; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-red:hover { background: #c04428; }
+  .btn-gold { background: var(--gold); color: #000; }
+  .btn-gold:hover { background: #d4a830; }
+  .btn-outline {
+    background: transparent; border: 1px solid #4a3d20; color: var(--muted);
+  }
+  .btn-outline:hover { border-color: var(--blue); color: var(--text); }
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+
+  /* Stat boxes */
+  .train-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  .stat-box {
+    background: var(--bg3); padding: 12px 8px; border-radius: 8px; text-align: center;
+  }
+  .stat-box .val { font-size: 1.3rem; font-weight: 700; }
+  .stat-box .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+  /* Info callouts */
+  .info-box {
+    background: #2a2210; border: 1px solid #5a4a28; border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 16px; font-size: 0.84rem; line-height: 1.6;
+    color: var(--muted);
+  }
+  .info-box strong { color: var(--text); }
+  .info-box code {
+    background: var(--bg3); padding: 1px 5px; border-radius: 4px;
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; color: var(--gold);
+  }
+
+  /* Chain visuals */
+  .chain-diagram {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0; padding: 24px 0; position: relative;
+  }
+  .chain-neuron {
+    width: 120px; height: 120px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; font-weight: 700; font-size: 0.85rem;
+    transition: all .4s; position: relative; z-index: 2;
+  }
+  .chain-neuron .cn-label { font-size: 0.7rem; color: rgba(255,255,255,0.7); }
+  .chain-neuron .cn-prob { font-size: 1.2rem; }
+  .synapse-line {
+    width: 120px; height: 6px; position: relative; display: flex; align-items: center;
+    z-index: 1;
+  }
+  .synapse-line .line-bg {
+    width: 100%; height: 6px; border-radius: 3px; background: var(--bg3);
+    position: relative; overflow: hidden;
+  }
+  .synapse-line .line-fill {
+    position: absolute; top: 0; left: 0; height: 100%; border-radius: 3px;
+    background: var(--gold); transition: width .4s;
+  }
+  .synapse-line .dot {
+    position: absolute; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--gold); box-shadow: 0 0 12px var(--gold);
+    animation: synapsePulse 1.5s ease-in-out infinite; top: -3px;
+  }
+  @keyframes synapsePulse {
+    0% { left: 0; opacity: 1; }
+    100% { left: calc(100% - 12px); opacity: 0.3; }
+  }
+  .synapse-weight-label {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    font-size: 0.72rem; color: var(--gold); font-weight: 600; white-space: nowrap;
+  }
+
+  .chain-output-box {
+    text-align: center; padding: 20px;
+    background: var(--bg3); border-radius: var(--radius); margin-top: 16px;
+  }
+
+  /* Sensitivity */
+  .sens-bar-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+    font-size: 0.84rem;
+  }
+  .sens-bar-row .name { width: 140px; text-align: right; flex-shrink: 0; font-weight: 500; }
+  .sens-bar-row .bar-wrap {
+    flex: 1; height: 20px; background: var(--bg3); border-radius: 10px; overflow: hidden;
+  }
+  .sens-bar-row .bar {
+    height: 100%; border-radius: 10px; transition: width .4s ease;
+  }
+  .sens-bar-row .val { width: 50px; font-weight: 600; text-align: right; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    body { flex-direction: column; }
+    .sidebar {
+      width: 100%; min-width: 100%; height: auto; position: relative;
+      flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid #3d321a;
+    }
+    .sidebar-header { padding: 12px; flex: 0 0 100%; }
+    .scenario-list { display: flex; gap: 6px; padding: 8px; overflow-x: auto; flex: 0 0 100%; }
+    .scenario-card { min-width: 160px; margin-bottom: 0; }
+    .sidebar-section { display: none; }
+    .main { height: auto; }
+    .grid-2, .grid-3, .grid-2-1, .grid-1-2 { grid-template-columns: 1fr; }
+    .train-stats { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <h2>Scenarios</h2>
+  </div>
+  <div class="scenario-list" id="scenario-list"></div>
+  <div class="sidebar-section" id="custom-section">
+    <h3 onclick="toggleCustom()">Create Your Own</h3>
+    <div class="section-body">
+      <div class="custom-form">
+        <div style="display:grid;grid-template-columns:1fr 50px;gap:4px;">
+          <input id="cs-title" placeholder="Scenario title">
+          <input id="cs-emoji" placeholder="✨" maxlength="4" style="text-align:center;">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+          <input id="cs-yes" placeholder="Yes label">
+          <input id="cs-no" placeholder="No label">
+        </div>
+        <label>Question</label>
+        <input id="cs-question" placeholder="Should I do this?">
+        <label>Inputs</label>
+        <div id="cs-inputs"></div>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-blue" onclick="addCustomInput()">+ Input</button>
+          <button class="btn btn-sm btn-green" onclick="saveCustomScenario()">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ===== MAIN ===== -->
+<div class="main">
+  <header>
+    <h1 id="main-title">Decision Neuron</h1>
+    <p id="main-tagline">"Weighing opportunity against reality — one synapse at a time."</p>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="core">Core</button>
+    <button class="tab-btn" data-tab="training">Training</button>
+    <button class="tab-btn" data-tab="chain">Neuron Chain</button>
+    <button class="tab-btn" data-tab="sensitivity">Sensitivity</button>
+  </nav>
+
+  <!-- ==================== CORE TAB ==================== -->
+  <section id="tab-core" class="tab-content active">
+    <div class="grid-2">
+      <!-- Left: Sliders + Boundary -->
+      <div>
+        <div class="card">
+          <h2>Inputs</h2>
+          <div id="sliders-container"></div>
+        </div>
+        <div class="card">
+          <h2>Decision Boundary</h2>
+          <p style="font-size:.78rem;color:var(--muted);margin-bottom:8px;">
+            <span id="axis-x-label">Goal Alignment</span> (x) vs <span id="axis-y-label">Time Cost</span> (y) — gold line = 50% threshold
+          </p>
+          <canvas id="boundary-canvas" height="360"></canvas>
+        </div>
+      </div>
+      <!-- Right: Neuron Output -->
+      <div>
+        <div class="card neuron-display">
+          <div class="neuron-circle yes" id="neuron-icon">🧠</div>
+          <div class="prob-text" id="prob-text">50%</div>
+          <div class="decision-text" id="decision-text">Pursue It 🚀</div>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar-marker"></div>
+            <div class="conf-bar" id="conf-bar" style="width:50%;background:var(--gold)"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Math Breakdown</h2>
+          <div class="math-breakdown" id="math-breakdown"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TRAINING TAB ==================== -->
+  <section id="tab-training" class="tab-content">
+    <div class="info-box">
+      <strong>How Perceptron Training Works</strong><br>
+      This demonstrates how a single neuron <em>learns</em> from data. Click on the 2D plot to place labeled data points
+      (green = <strong>Yes</strong>, red = <strong>No</strong>). The neuron starts with random weights and no knowledge of where the boundary should be.
+      Each <strong>Step</strong> runs one learning iteration: for every point, the neuron compares its prediction to the true label
+      and nudges its weights using the rule <code>w += lr * error * x</code>. Watch the gold decision boundary shift
+      in real time as the neuron learns to separate your points. <strong>Train (20)</strong> runs 20 steps with smooth animation.
+    </div>
+
+    <div class="train-stats" style="margin-bottom:16px;">
+      <div class="stat-box"><div class="val" id="ts-steps">0</div><div class="lbl">Steps Taken</div></div>
+      <div class="stat-box"><div class="val" id="ts-accuracy">—</div><div class="lbl">Accuracy</div></div>
+      <div class="stat-box"><div class="val" id="ts-points">0</div><div class="lbl">Data Points</div></div>
+      <div class="stat-box"><div class="val" id="ts-bias">0.00</div><div class="lbl">Learned Bias</div></div>
+    </div>
+
+    <div class="grid-2-1">
+      <div class="card" style="margin-bottom:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <h2 style="margin-bottom:0;">Training Plot</h2>
+          <div class="btn-group" style="margin:0;">
+            <button class="btn btn-sm btn-green" id="label-yes-btn" onclick="setTrainLabel(1)">Pursue It 🚀</button>
+            <button class="btn btn-sm btn-outline" id="label-no-btn" onclick="setTrainLabel(0)">Pass ✋</button>
+          </div>
+        </div>
+        <p style="font-size:.78rem;color:var(--muted);margin-bottom:8px;">
+          Click anywhere to place a point with the selected label. The background color shows the neuron's current prediction regions.
+        </p>
+        <canvas id="train-canvas" height="450"></canvas>
+        <div class="btn-group" style="margin-top:12px;">
+          <button class="btn btn-blue" onclick="trainStep()">Step (1 iteration)</button>
+          <button class="btn btn-gold" onclick="trainMany()">Train (20 steps)</button>
+          <button class="btn btn-red" onclick="resetTraining()">Reset All</button>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Learned Weights</h2>
+          <p style="font-size:.78rem;color:var(--muted);margin-bottom:10px;">
+            These are the weight values the neuron has learned so far. They started at 0 and update each step.
+          </p>
+          <div id="train-weights" class="math-breakdown"></div>
+        </div>
+        <div class="card">
+          <h2>How to Read This</h2>
+          <p style="font-size:.8rem;color:var(--muted);line-height:1.6;">
+            <strong style="color:var(--green);">Green region</strong> = neuron predicts "Yes"<br>
+            <strong style="color:var(--red);">Red region</strong> = neuron predicts "No"<br>
+            <strong style="color:var(--gold);">Gold line</strong> = decision boundary (50%)<br><br>
+            A <strong>correctly classified</strong> point sits in the region matching its color. When accuracy is 100%, the boundary perfectly separates all your points.<br><br>
+            <strong>Learning rate:</strong> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;color:var(--gold);font-family:monospace;">0.1</code> — controls how much weights change per step.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CHAIN TAB ==================== -->
+  <section id="tab-chain" class="tab-content">
+    <div class="info-box">
+      <strong>Two-Neuron Chain — A Tiny Neural Network</strong><br>
+      This is the simplest possible neural network: two neurons connected in sequence. <strong>Neuron 1</strong> is the same decision neuron from the Core tab — its output
+      (a probability between 0 and 1) feeds directly into <strong>Neuron 2</strong> as one of its inputs, weighted by the synapse connection.
+      Neuron 2 combines N1's output with its own additional factors (mentor support, gut feeling, competing priorities) to produce a
+      <strong>final decision</strong>. This demonstrates how neural networks compose: each layer transforms and enriches the signal from the previous one.
+    </div>
+
+    <!-- Chain Diagram -->
+    <div class="card">
+      <h2>Network Diagram</h2>
+      <div class="chain-diagram">
+        <div class="chain-neuron yes" id="chain-n1">
+          <span class="cn-label">Neuron 1</span>
+          <span class="cn-prob" id="chain-n1-prob">50%</span>
+          <span class="cn-label" id="chain-n1-dec">—</span>
+        </div>
+        <div class="synapse-line">
+          <div class="synapse-weight-label">w = <span id="synapse-w-label">2.0</span></div>
+          <div class="line-bg"><div class="line-fill" id="synapse-fill" style="width:50%"></div></div>
+          <div class="dot"></div>
+        </div>
+        <div class="chain-neuron yes" id="chain-n2">
+          <span class="cn-label">Neuron 2</span>
+          <span class="cn-prob" id="chain-n2-prob">50%</span>
+          <span class="cn-label" id="chain-n2-dec">—</span>
+        </div>
+      </div>
+      <div class="chain-output-box">
+        <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px;">Final Network Output</div>
+        <div class="prob-text" id="chain-final-text">50%</div>
+        <div class="decision-text" id="chain-final-decision">Pursue It 🚀</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Neuron 2 Inputs -->
+      <div class="card">
+        <h2>Neuron 2 Inputs</h2>
+        <p style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">
+          The synapse weight controls how strongly Neuron 1's output influences Neuron 2.
+          The additional inputs below represent factors only Neuron 2 considers.
+        </p>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="name">Synapse Weight (N1 → N2)</span>
+            <span class="weight-tag pos">+<span id="synapse-w-val">2.0</span></span>
+            <span class="slider-val" id="synapse-w-disp">2.0</span>
+          </div>
+          <input type="range" min="0" max="4" step="0.1" value="2.0" id="synapse-w" oninput="updateChain()">
+        </div>
+        <hr style="border:none;border-top:1px solid #3d321a;margin:12px 0;">
+        <div id="chain-sliders"></div>
+      </div>
+      <!-- Chain Math -->
+      <div class="card">
+        <h2>Chain Math — Step by Step</h2>
+        <p style="font-size:.78rem;color:var(--muted);margin-bottom:10px;">
+          Follow the signal as it flows from Neuron 1 through the synapse into Neuron 2:
+        </p>
+        <div class="math-breakdown" id="chain-math"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SENSITIVITY TAB ==================== -->
+  <section id="tab-sensitivity" class="tab-content">
+    <div class="info-box">
+      <strong>Sensitivity Analysis</strong><br>
+      How much does each input actually matter? Each curve shows what happens to the output probability when one input sweeps from 0 to 1
+      while all other inputs stay at their current slider values. A <strong>steep curve</strong> = high influence. A <strong>flat curve</strong> = low influence.
+      Inputs with negative weights (Time Cost, Financial Cost) slope downward — increasing them pushes the probability down.
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Sensitivity Curves</h2>
+        <canvas id="sens-canvas" height="420"></canvas>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Influence Ranking</h2>
+          <p style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">
+            Ranked from most to least influential at current slider positions.
+            The percentage shows the total output range each input can produce.
+          </p>
+          <div id="sens-bars"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ========== DATA ==========
+// display: { min, max, unit, decimals } — maps 0-1 slider to a human-readable scale
+// If omitted, defaults to 1-10 scale
+const scenarios = [
+  {
+    id: 'professional', emoji: '🎓', name: 'Professional Opportunity',
+    question: 'Should I pursue this professional development opportunity?',
+    yes: 'Pursue It 🚀', no: 'Pass for Now ✋',
+    tagline: '"Weighing opportunity against reality — one synapse at a time."',
+    celebration: "This opportunity is calling your name! Go get it! 🎉",
+    inputs: [
+      { name: 'Goal Alignment', weight: 2.5, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Time Cost', weight: -2.0, default: 0.5, display: { min: 1, max: 40, unit: ' hrs/wk', decimals: 0 } },
+      { name: 'Prestige & Impact', weight: 1.5, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Qualification Fit', weight: 1.0, default: 0.5, display: { min: 0, max: 100, unit: '%', decimals: 0 } },
+      { name: 'Financial Cost', weight: -0.8, default: 0.5, display: { min: 0, max: 5000, unit: '$', decimals: 0, prefix: '$' } },
+    ],
+    bias: 0.0
+  },
+  {
+    id: 'gym', emoji: '💪', name: 'Gym Day',
+    question: 'Should I go to the gym?',
+    yes: "Let's Go 💪", no: 'Rest Day 🛋️',
+    tagline: '"No pain, no gain — but is today the day?"',
+    celebration: "No excuses — time to crush it! 🏋️",
+    inputs: [
+      { name: 'Energy Level', weight: 2.0, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Soreness', weight: -1.8, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Motivation', weight: 1.5, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Schedule Free', weight: 1.2, default: 0.5, display: { min: 0, max: 4, unit: ' hrs free', decimals: 1 } },
+      { name: 'Weather (outdoor)', weight: -0.5, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0, labels: ['Clear', 'Stormy'] } },
+    ],
+    bias: 0.0
+  },
+  {
+    id: 'food', emoji: '🍕', name: 'Order Food or Cook',
+    question: 'Should I order out?',
+    yes: 'Order It 🍕', no: 'Cook 🍳',
+    tagline: '"The eternal debate: convenience vs. savings."',
+    celebration: "Treat yourself — you've earned it! 🎊",
+    inputs: [
+      { name: 'Craving Intensity', weight: 2.0, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Cooking Effort', weight: -1.5, default: 0.5, display: { min: 5, max: 90, unit: ' min', decimals: 0 } },
+      { name: 'Budget Available', weight: 1.2, default: 0.5, display: { min: 0, max: 50, unit: '$', decimals: 0, prefix: '$' } },
+      { name: 'Ingredients at Home', weight: -1.8, default: 0.5, display: { min: 0, max: 100, unit: '%', decimals: 0, labels: ['Nothing', 'Fully stocked'] } },
+      { name: 'Social (eating with others)', weight: 1.0, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0, labels: ['Solo', 'Group'] } },
+    ],
+    bias: 0.0
+  },
+  {
+    id: 'sideproject', emoji: '🛠️', name: 'Start a Side Project',
+    question: 'Should I start this side project?',
+    yes: 'Build It 🛠️', no: 'Not Now 🙅',
+    tagline: '"Ideas are cheap — execution is everything."',
+    celebration: "Stop dreaming, start building! Ship it! 🚢",
+    inputs: [
+      { name: 'Excitement Level', weight: 2.2, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Time Already Committed', weight: -2.0, default: 0.5, display: { min: 0, max: 40, unit: ' hrs/wk', decimals: 0 } },
+      { name: 'Learning Potential', weight: 1.5, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Feasibility', weight: 1.2, default: 0.5, display: { min: 0, max: 100, unit: '%', decimals: 0 } },
+      { name: 'Burnout Risk', weight: -1.0, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+    ],
+    bias: 0.0
+  },
+  {
+    id: 'movie', emoji: '🎬', name: 'Movie Night',
+    question: 'Should I watch this movie tonight?',
+    yes: 'Watch It 🍿', no: 'Skip It 😴',
+    tagline: '"So many movies, so little time."',
+    celebration: "Grab the popcorn — this one's a must-watch! 🍿🎬",
+    inputs: [
+      { name: 'Interest in Genre', weight: 2.0, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Runtime Length', weight: -1.5, default: 0.5, display: { min: 1, max: 3.5, unit: ' hrs', decimals: 1 } },
+      { name: 'Reviews / Hype', weight: 1.5, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+      { name: 'Free Evening', weight: 1.3, default: 0.5, display: { min: 0, max: 5, unit: ' hrs', decimals: 1 } },
+      { name: 'Tiredness', weight: -1.2, default: 0.5, display: { min: 1, max: 10, unit: '/10', decimals: 0 } },
+    ],
+    bias: 0.0
+  }
+];
+
+let currentScenario = scenarios[0];
+let sliderValues = [];
+
+// Chain neuron 2 inputs
+const chainInputs = [
+  { name: 'Mentor/Advisor Support', weight: 1.5, default: 0.5 },
+  { name: 'Gut Feeling', weight: 1.2, default: 0.5 },
+  { name: 'Competing Priorities', weight: -1.8, default: 0.5 },
+];
+let chainSliderValues = [0.5, 0.5, 0.5];
+
+// Training state
+let trainPoints = [];
+let trainLabel = 1;
+let trainWeights = [0, 0];
+let trainBias = 0;
+let trainSteps = 0;
+const trainLR = 0.1;
+
+// ========== SIGMOID ==========
+function sigmoid(z) { return 1 / (1 + Math.exp(-z)); }
+
+// ========== TABS ==========
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    // Redraw canvases when their tab becomes visible (fixes sizing bugs)
+    requestAnimationFrame(() => {
+      if (btn.dataset.tab === 'training') drawTrainCanvas();
+      if (btn.dataset.tab === 'sensitivity') drawSensitivity();
+      if (btn.dataset.tab === 'core') { drawBoundary(); }
+    });
+  });
+});
+
+// ========== DISPLAY FORMATTING ==========
+function formatDisplay(value01, inp) {
+  const d = inp.display || { min: 1, max: 10, unit: '/10', decimals: 0 };
+  const mapped = d.min + value01 * (d.max - d.min);
+  const num = mapped.toFixed(d.decimals);
+  if (d.prefix) return d.prefix + num;
+  return num + d.unit;
+}
+
+function getDisplayRange(inp) {
+  const d = inp.display || { min: 1, max: 10, unit: '/10', decimals: 0 };
+  const lo = d.prefix ? d.prefix + d.min.toFixed(d.decimals) : d.min.toFixed(d.decimals) + d.unit;
+  const hi = d.prefix ? d.prefix + d.max.toFixed(d.decimals) : d.max.toFixed(d.decimals) + d.unit;
+  // Use custom labels if provided
+  const loLabel = (d.labels && d.labels[0]) || lo;
+  const hiLabel = (d.labels && d.labels[1]) || hi;
+  return { lo: loLabel, hi: hiLabel };
+}
+
+// ========== BUILD SLIDERS ==========
+function buildDotsHtml(absWeight, isPositive) {
+  const totalDots = 5;
+  const filled = Math.round((absWeight / 5) * totalDots);
+  const cls = isPositive ? 'filled-pos' : 'filled-neg';
+  let html = '';
+  for (let d = 0; d < totalDots; d++) {
+    html += `<span class="dot${d < filled ? ' ' + cls : ''}"></span>`;
+  }
+  return html;
+}
+
+function buildSliders() {
+  const container = document.getElementById('sliders-container');
+  container.innerHTML = '';
+  sliderValues = currentScenario.inputs.map(inp => inp.default);
+  currentScenario.inputs.forEach((inp, i) => {
+    const pos = inp.weight >= 0;
+    const range = getDisplayRange(inp);
+    const absW = Math.abs(inp.weight);
+    const div = document.createElement('div');
+    div.className = 'slider-group';
+    // Build dots HTML
+    const dotsHtml = buildDotsHtml(absW, pos);
+    div.innerHTML = `
+      <div class="slider-label">
+        <span class="name">${inp.name}</span>
+        <span class="weight-tag ${pos ? 'pos' : 'neg'}" id="wt-${i}">${pos ? '+' : ''}${inp.weight}</span>
+        <span class="slider-val" id="sv-${i}">${formatDisplay(inp.default, inp)}</span>
+      </div>
+      <input type="range" min="0" max="1" step="0.01" value="${inp.default}" id="slider-${i}">
+      <div class="slider-range-labels"><span>${range.lo}</span><span>${range.hi}</span></div>
+      <div class="importance-row">
+        <span class="imp-label">Importance</span>
+        <div class="importance-dots" id="dots-${i}">${dotsHtml}</div>
+        <input type="range" min="0" max="5" step="0.1" value="${absW}" id="wslider-${i}">
+        <span class="imp-val" id="wv-${i}" style="color:${pos ? 'var(--green)' : 'var(--red)'}">${absW.toFixed(1)}</span>
+      </div>
+    `;
+    container.appendChild(div);
+    // Value slider
+    div.querySelector(`#slider-${i}`).addEventListener('input', (e) => {
+      sliderValues[i] = parseFloat(e.target.value);
+      document.getElementById('sv-' + i).textContent = formatDisplay(sliderValues[i], inp);
+      updateAll();
+    });
+    // Weight/importance slider
+    div.querySelector(`#wslider-${i}`).addEventListener('input', (e) => {
+      const absVal = parseFloat(e.target.value);
+      const sign = inp.weight >= 0 ? 1 : -1;
+      const isPos = sign >= 0;
+      inp.weight = sign * absVal;
+      document.getElementById('wv-' + i).textContent = absVal.toFixed(1);
+      const tag = document.getElementById('wt-' + i);
+      tag.textContent = (isPos ? '+' : '-') + absVal.toFixed(1);
+      tag.className = 'weight-tag ' + (isPos ? 'pos' : 'neg');
+      document.getElementById('dots-' + i).innerHTML = buildDotsHtml(absVal, isPos);
+      updateAll();
+    });
+  });
+  // Update axis labels
+  document.getElementById('axis-x-label').textContent = currentScenario.inputs[0].name;
+  document.getElementById('axis-y-label').textContent = currentScenario.inputs[1].name;
+}
+
+// ========== COMPUTE ==========
+function compute() {
+  let z = currentScenario.bias;
+  currentScenario.inputs.forEach((inp, i) => {
+    z += sliderValues[i] * inp.weight;
+  });
+  return { z, prob: sigmoid(z) };
+}
+
+let lastDecision = null;
+function updateAll() {
+  const { z, prob } = compute();
+  const yes = prob >= 0.5;
+  const pct = (prob * 100).toFixed(1);
+
+  document.getElementById('prob-text').textContent = pct + '%';
+  document.getElementById('decision-text').textContent = yes ? currentScenario.yes : currentScenario.no;
+
+  if (prob > 0.85) {
+    document.getElementById('decision-text').textContent += ' — ' + (currentScenario.celebration || '');
+  }
+
+  const icon = document.getElementById('neuron-icon');
+  icon.className = 'neuron-circle ' + (yes ? 'yes' : 'no');
+  if (lastDecision !== null && lastDecision !== yes) {
+    icon.classList.add('pulse');
+    setTimeout(() => icon.classList.remove('pulse'), 500);
+  }
+  lastDecision = yes;
+
+  const bar = document.getElementById('conf-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = prob >= 0.5
+    ? `linear-gradient(90deg, var(--green-dim), var(--green))`
+    : `linear-gradient(90deg, var(--red), var(--red-dim))`;
+
+  // Math breakdown
+  const mb = document.getElementById('math-breakdown');
+  let lines = [];
+  lines.push(`<div class="line" style="margin-bottom:4px;"><strong>z = sum of (input × weight) + bias</strong></div>`);
+  currentScenario.inputs.forEach((inp, i) => {
+    const contrib = (sliderValues[i] * inp.weight).toFixed(3);
+    const sign = parseFloat(contrib) >= 0 ? '+' : '';
+    const friendly = formatDisplay(sliderValues[i], inp);
+    lines.push(`<div class="line">  <span>${sliderValues[i].toFixed(2)}</span> × <span>${inp.weight >= 0 ? '+' : ''}${inp.weight}</span> <span style="color:var(--muted)">(${inp.name}: ${friendly})</span> = <span>${sign}${contrib}</span></div>`);
+  });
+  lines.push(`<div class="line">  bias = <span>${currentScenario.bias.toFixed(1)}</span></div>`);
+  lines.push(`<div class="line" style="margin-top:6px;border-top:1px solid #3d321a;padding-top:6px;"><strong>z = <span>${z.toFixed(4)}</span></strong></div>`);
+  lines.push(`<div class="line"><strong>σ(z) = 1/(1+e<sup>-z</sup>) = <span>${prob.toFixed(4)}</span></strong></div>`);
+  lines.push(`<div class="line"><strong>Output: <span style="color:${yes ? 'var(--green)' : 'var(--red)'}">${pct}% → ${yes ? 'YES' : 'NO'}</span></strong></div>`);
+  mb.innerHTML = lines.join('');
+
+  drawBoundary();
+  updateChain();
+  if (document.getElementById('tab-sensitivity').classList.contains('active')) drawSensitivity();
+}
+
+// ========== DECISION BOUNDARY CANVAS ==========
+function drawBoundary() {
+  const canvas = document.getElementById('boundary-canvas');
+  if (canvas.clientWidth === 0) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width = canvas.clientWidth * dpr;
+  const H = canvas.height = canvas.clientHeight * dpr;
+
+  const inputs = currentScenario.inputs;
+
+  const step = Math.max(4, Math.round(6 * dpr));
+  for (let px = 0; px < W; px += step) {
+    for (let py = 0; py < H; py += step) {
+      const x = px / W;
+      const y = 1 - py / H;
+      let z = currentScenario.bias;
+      inputs.forEach((inp, i) => {
+        if (i === 0) z += x * inp.weight;
+        else if (i === 1) z += y * inp.weight;
+        else z += sliderValues[i] * inp.weight;
+      });
+      const p = sigmoid(z);
+      if (p >= 0.5) {
+        ctx.fillStyle = `rgba(124,196,64,${0.1 + (p - 0.5) * 0.6})`;
+      } else {
+        ctx.fillStyle = `rgba(224,90,58,${0.1 + (0.5 - p) * 0.6})`;
+      }
+      ctx.fillRect(px, py, step, step);
+    }
+  }
+
+  // Decision boundary line
+  let rest = currentScenario.bias;
+  inputs.forEach((inp, i) => { if (i > 1) rest += sliderValues[i] * inp.weight; });
+  const w0 = inputs[0].weight, w1 = inputs[1].weight;
+
+  ctx.strokeStyle = '#f0c34e';
+  ctx.lineWidth = 3 * dpr;
+  ctx.setLineDash([8 * dpr, 5 * dpr]);
+  ctx.beginPath();
+  let started = false;
+  for (let px = 0; px <= W; px += 2) {
+    const x = px / W;
+    const y = -(w0 * x + rest) / w1;
+    const py = (1 - y) * H;
+    if (py >= 0 && py <= H) {
+      if (!started) { ctx.moveTo(px, py); started = true; }
+      else ctx.lineTo(px, py);
+    }
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Crosshair
+  const cx = sliderValues[0] * W;
+  const cy = (1 - sliderValues[1]) * H;
+  ctx.beginPath(); ctx.arc(cx, cy, 10 * dpr, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, 7 * dpr, 0, Math.PI * 2);
+  ctx.fillStyle = compute().prob >= 0.5 ? '#7cc440' : '#e05a3a'; ctx.fill();
+
+  // Axis labels
+  const fs = 12 * dpr;
+  ctx.fillStyle = '#a89872'; ctx.font = `${fs}px Inter, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(inputs[0].name + ' →', W / 2, H - 6 * dpr);
+  ctx.save();
+  ctx.translate(14 * dpr, H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(inputs[1].name + ' →', 0, 0);
+  ctx.restore();
+}
+
+// ========== TRAINING ==========
+function setTrainLabel(l) {
+  trainLabel = l;
+  const yesBtn = document.getElementById('label-yes-btn');
+  const noBtn = document.getElementById('label-no-btn');
+  if (l === 1) {
+    yesBtn.className = 'btn btn-sm btn-green';
+    noBtn.className = 'btn btn-sm btn-outline';
+  } else {
+    yesBtn.className = 'btn btn-sm btn-outline';
+    noBtn.className = 'btn btn-sm btn-red';
+  }
+}
+
+function initTrainCanvas() {
+  const canvas = document.getElementById('train-canvas');
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = 1 - (e.clientY - rect.top) / rect.height;
+    trainPoints.push({ x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)), label: trainLabel });
+    drawTrainCanvas();
+    updateTrainStats();
+  });
+}
+
+function drawTrainCanvas() {
+  const canvas = document.getElementById('train-canvas');
+  if (canvas.clientWidth === 0) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width = canvas.clientWidth * dpr;
+  const H = canvas.height = canvas.clientHeight * dpr;
+
+  const step = Math.max(4, Math.round(6 * dpr));
+  for (let px = 0; px < W; px += step) {
+    for (let py = 0; py < H; py += step) {
+      const x = px / W;
+      const y = 1 - py / H;
+      const z = trainWeights[0] * x + trainWeights[1] * y + trainBias;
+      const p = sigmoid(z);
+      if (p >= 0.5) {
+        ctx.fillStyle = `rgba(124,196,64,${0.08 + (p - 0.5) * 0.4})`;
+      } else {
+        ctx.fillStyle = `rgba(224,90,58,${0.08 + (0.5 - p) * 0.4})`;
+      }
+      ctx.fillRect(px, py, step, step);
+    }
+  }
+
+  // Boundary line
+  if (trainWeights[1] !== 0) {
+    ctx.strokeStyle = '#f0c34e';
+    ctx.lineWidth = 3 * dpr;
+    ctx.setLineDash([8 * dpr, 5 * dpr]);
+    ctx.beginPath();
+    let started = false;
+    for (let px = 0; px <= W; px += 2) {
+      const x = px / W;
+      const y = -(trainWeights[0] * x + trainBias) / trainWeights[1];
+      const py = (1 - y) * H;
+      if (py >= 0 && py <= H) {
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      }
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Points
+  trainPoints.forEach(pt => {
+    const px = pt.x * W;
+    const py = (1 - pt.y) * H;
+    // Check if correctly classified
+    const z = trainWeights[0] * pt.x + trainWeights[1] * pt.y + trainBias;
+    const pred = sigmoid(z) >= 0.5 ? 1 : 0;
+    const correct = pred === pt.label;
+
+    ctx.beginPath(); ctx.arc(px, py, 9 * dpr, 0, Math.PI * 2);
+    ctx.fillStyle = pt.label === 1 ? '#7cc440' : '#e05a3a';
+    ctx.fill();
+    ctx.strokeStyle = correct ? '#fff' : '#f0c34e';
+    ctx.lineWidth = (correct ? 2 : 3) * dpr;
+    ctx.stroke();
+  });
+
+  // Axis labels
+  const fs = 12 * dpr;
+  ctx.fillStyle = '#a89872'; ctx.font = `${fs}px Inter, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(currentScenario.inputs[0].name + ' →', W / 2, H - 6 * dpr);
+  ctx.save();
+  ctx.translate(14 * dpr, H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(currentScenario.inputs[1].name + ' →', 0, 0);
+  ctx.restore();
+}
+
+function trainStep() {
+  if (trainPoints.length === 0) return;
+  trainPoints.forEach(pt => {
+    const z = trainWeights[0] * pt.x + trainWeights[1] * pt.y + trainBias;
+    const pred = sigmoid(z);
+    const err = pt.label - pred;
+    trainWeights[0] += trainLR * err * pt.x;
+    trainWeights[1] += trainLR * err * pt.y;
+    trainBias += trainLR * err;
+  });
+  trainSteps++;
+  drawTrainCanvas();
+  updateTrainStats();
+}
+
+let trainAnimating = false;
+function trainMany() {
+  if (trainPoints.length === 0 || trainAnimating) return;
+  trainAnimating = true;
+  let i = 0;
+  const interval = setInterval(() => {
+    trainStep();
+    i++;
+    if (i >= 20) { clearInterval(interval); trainAnimating = false; }
+  }, 80);
+}
+
+function resetTraining() {
+  trainPoints = [];
+  trainWeights = [0, 0];
+  trainBias = 0;
+  trainSteps = 0;
+  drawTrainCanvas();
+  updateTrainStats();
+}
+
+function updateTrainStats() {
+  document.getElementById('ts-steps').textContent = trainSteps;
+  document.getElementById('ts-points').textContent = trainPoints.length;
+  document.getElementById('ts-bias').textContent = trainBias.toFixed(3);
+
+  if (trainPoints.length > 0) {
+    let correct = 0;
+    trainPoints.forEach(pt => {
+      const z = trainWeights[0] * pt.x + trainWeights[1] * pt.y + trainBias;
+      const pred = sigmoid(z) >= 0.5 ? 1 : 0;
+      if (pred === pt.label) correct++;
+    });
+    const acc = ((correct / trainPoints.length) * 100).toFixed(0);
+    document.getElementById('ts-accuracy').textContent = acc + '%';
+    document.getElementById('ts-accuracy').style.color = parseInt(acc) === 100 ? 'var(--green)' : (parseInt(acc) >= 70 ? 'var(--gold)' : 'var(--red)');
+  } else {
+    document.getElementById('ts-accuracy').textContent = '—';
+    document.getElementById('ts-accuracy').style.color = '';
+  }
+
+  document.getElementById('train-weights').innerHTML = `
+    <div class="line">w₁ (<span style="color:var(--text)">${currentScenario.inputs[0].name}</span>) = <span>${trainWeights[0].toFixed(4)}</span></div>
+    <div class="line">w₂ (<span style="color:var(--text)">${currentScenario.inputs[1].name}</span>) = <span>${trainWeights[1].toFixed(4)}</span></div>
+    <div class="line">bias = <span>${trainBias.toFixed(4)}</span></div>
+    <div class="line" style="margin-top:8px;border-top:1px solid #3d321a;padding-top:8px;">
+      <strong>Decision rule:</strong>
+    </div>
+    <div class="line">σ(${trainWeights[0].toFixed(2)}·x + ${trainWeights[1].toFixed(2)}·y + ${trainBias.toFixed(2)}) ≥ 0.5?</div>
+  `;
+}
+
+// ========== CHAIN ==========
+function buildChainSliders() {
+  const container = document.getElementById('chain-sliders');
+  container.innerHTML = '';
+  chainInputs.forEach((inp, i) => {
+    const pos = inp.weight >= 0;
+    const div = document.createElement('div');
+    div.className = 'slider-group';
+    div.innerHTML = `
+      <div class="slider-label">
+        <span class="name">${inp.name}</span>
+        <span class="weight-tag ${pos ? 'pos' : 'neg'}">${pos ? '+' : ''}${inp.weight}</span>
+        <span class="slider-val" id="csv-${i}">${inp.default.toFixed(2)}</span>
+      </div>
+      <input type="range" min="0" max="1" step="0.01" value="${inp.default}" id="cslider-${i}">
+    `;
+    container.appendChild(div);
+    div.querySelector('input').addEventListener('input', (e) => {
+      chainSliderValues[i] = parseFloat(e.target.value);
+      document.getElementById('csv-' + i).textContent = chainSliderValues[i].toFixed(2);
+      updateChain();
+    });
+  });
+}
+
+function updateChain() {
+  const { z: z1, prob: a1 } = compute();
+  const synapseW = parseFloat(document.getElementById('synapse-w').value);
+
+  document.getElementById('synapse-w-val').textContent = synapseW.toFixed(1);
+  document.getElementById('synapse-w-disp').textContent = synapseW.toFixed(1);
+  document.getElementById('synapse-w-label').textContent = synapseW.toFixed(1);
+
+  // Synapse fill represents N1 output strength
+  const fill = document.getElementById('synapse-fill');
+  if (fill) fill.style.width = (a1 * 100) + '%';
+
+  let z2 = a1 * synapseW;
+  chainInputs.forEach((inp, i) => {
+    z2 += chainSliderValues[i] * inp.weight;
+  });
+  const a2 = sigmoid(z2);
+  const yes1 = a1 >= 0.5, yes2 = a2 >= 0.5;
+
+  // Update neuron visuals
+  const n1 = document.getElementById('chain-n1');
+  const n2 = document.getElementById('chain-n2');
+  [n1, n2].forEach((n, idx) => {
+    const isYes = idx === 0 ? yes1 : yes2;
+    n.style.background = isYes
+      ? 'radial-gradient(circle, var(--green) 0%, var(--green-dim) 100%)'
+      : 'radial-gradient(circle, var(--red) 0%, var(--red-dim) 100%)';
+    n.style.boxShadow = `0 0 30px ${isYes ? 'rgba(124,196,64,0.5)' : 'rgba(224,90,58,0.5)'}`;
+  });
+
+  document.getElementById('chain-n1-prob').textContent = (a1 * 100).toFixed(1) + '%';
+  document.getElementById('chain-n2-prob').textContent = (a2 * 100).toFixed(1) + '%';
+  document.getElementById('chain-n1-dec').textContent = yes1 ? 'YES' : 'NO';
+  document.getElementById('chain-n2-dec').textContent = yes2 ? 'YES' : 'NO';
+  document.getElementById('chain-final-text').textContent = (a2 * 100).toFixed(1) + '%';
+  document.getElementById('chain-final-decision').textContent = yes2 ? currentScenario.yes : currentScenario.no;
+
+  // Chain math
+  const cm = document.getElementById('chain-math');
+  let html = '';
+  html += `<div class="line" style="margin-bottom:6px;"><strong style="color:var(--blue)">NEURON 1</strong></div>`;
+  html += `<div class="line">z₁ = <span>${z1.toFixed(4)}</span></div>`;
+  html += `<div class="line">a₁ = σ(z₁) = <span>${a1.toFixed(4)}</span> <span style="color:${yes1 ? 'var(--green)' : 'var(--red)'}">(${yes1 ? 'YES' : 'NO'})</span></div>`;
+
+  html += `<div class="line" style="margin:10px 0 6px;border-top:1px solid #3d321a;padding-top:10px;"><strong style="color:var(--gold)">SYNAPSE</strong></div>`;
+  html += `<div class="line">a₁ × w_synapse = <span>${a1.toFixed(4)} × ${synapseW.toFixed(1)} = ${(a1 * synapseW).toFixed(4)}</span></div>`;
+
+  html += `<div class="line" style="margin:10px 0 6px;border-top:1px solid #3d321a;padding-top:10px;"><strong style="color:var(--blue)">NEURON 2</strong></div>`;
+  html += `<div class="line">z₂ = synapse + additional inputs</div>`;
+  html += `<div class="line">   = <span>${(a1 * synapseW).toFixed(4)}</span></div>`;
+  chainInputs.forEach((inp, i) => {
+    const v = chainSliderValues[i] * inp.weight;
+    html += `<div class="line">   ${v >= 0 ? '+' : ''} <span>${v.toFixed(4)}</span> <span style="color:var(--muted)">(${inp.name})</span></div>`;
+  });
+  html += `<div class="line" style="margin-top:6px;border-top:1px solid #3d321a;padding-top:6px;"><strong>z₂ = <span>${z2.toFixed(4)}</span></strong></div>`;
+  html += `<div class="line"><strong>a₂ = σ(z₂) = <span style="color:${yes2 ? 'var(--green)' : 'var(--red)'}">${a2.toFixed(4)} → ${yes2 ? 'YES' : 'NO'}</span></strong></div>`;
+  cm.innerHTML = html;
+}
+
+// ========== SENSITIVITY ==========
+function drawSensitivity() {
+  const canvas = document.getElementById('sens-canvas');
+  if (canvas.clientWidth === 0) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width = canvas.clientWidth * dpr;
+  const H = canvas.height = canvas.clientHeight * dpr;
+
+  ctx.fillStyle = '#1a1408';
+  ctx.fillRect(0, 0, W, H);
+
+  const pad = { top: 30 * dpr, right: 30 * dpr, bottom: 45 * dpr, left: 50 * dpr };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  // Grid
+  ctx.strokeStyle = '#3d321a'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 10; i++) {
+    const y = pad.top + (i / 10) * plotH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    if (i % 2 === 0) {
+      ctx.fillStyle = '#a89872'; ctx.font = `${10 * dpr}px Inter, sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.fillText(((10 - i) * 10) + '%', pad.left - 6 * dpr, y + 4 * dpr);
+    }
+  }
+  for (let i = 0; i <= 10; i++) {
+    const x = pad.left + (i / 10) * plotW;
+    ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, H - pad.bottom); ctx.stroke();
+    if (i % 2 === 0) {
+      ctx.fillStyle = '#a89872'; ctx.textAlign = 'center';
+      ctx.fillText((i / 10).toFixed(1), x, H - pad.bottom + 16 * dpr);
+    }
+  }
+
+  ctx.fillStyle = '#a89872'; ctx.font = `${11 * dpr}px Inter, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('Input Value', pad.left + plotW / 2, H - 4 * dpr);
+  ctx.save();
+  ctx.translate(12 * dpr, pad.top + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Output Probability', 0, 0);
+  ctx.restore();
+
+  const colors = ['#7cc440', '#e05a3a', '#e0b83a', '#d4875a', '#a89060'];
+  const influences = [];
+
+  currentScenario.inputs.forEach((inp, idx) => {
+    const points = [];
+    let minP = 1, maxP = 0;
+    for (let s = 0; s <= 100; s++) {
+      const sv = s / 100;
+      let z = currentScenario.bias;
+      currentScenario.inputs.forEach((inp2, i) => {
+        z += (i === idx ? sv : sliderValues[i]) * inp2.weight;
+      });
+      const p = sigmoid(z);
+      points.push({ x: sv, y: p });
+      minP = Math.min(minP, p);
+      maxP = Math.max(maxP, p);
+    }
+
+    ctx.strokeStyle = colors[idx]; ctx.lineWidth = 2.5 * dpr;
+    ctx.beginPath();
+    points.forEach((pt, i) => {
+      const px = pad.left + pt.x * plotW;
+      const py = pad.top + (1 - pt.y) * plotH;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // Current marker
+    let curZ = currentScenario.bias;
+    currentScenario.inputs.forEach((inp2, i) => { curZ += sliderValues[i] * inp2.weight; });
+    // For the marker on each curve, compute prob at current values for THIS input
+    let markerZ = currentScenario.bias;
+    currentScenario.inputs.forEach((inp2, i) => { markerZ += sliderValues[i] * inp2.weight; });
+    const markerP = sigmoid(markerZ);
+    const mx = pad.left + sliderValues[idx] * plotW;
+    const my = pad.top + (1 - markerP) * plotH;
+    ctx.setLineDash([4 * dpr, 3 * dpr]);
+    ctx.strokeStyle = colors[idx] + '66'; ctx.lineWidth = 1.5 * dpr;
+    ctx.beginPath(); ctx.moveTo(mx, pad.top); ctx.lineTo(mx, H - pad.bottom); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.beginPath(); ctx.arc(mx, my, 5 * dpr, 0, Math.PI * 2);
+    ctx.fillStyle = colors[idx]; ctx.fill();
+
+    influences.push({ name: inp.name, influence: maxP - minP, color: colors[idx] });
+  });
+
+  // Legend
+  ctx.font = `${10 * dpr}px Inter, sans-serif`;
+  currentScenario.inputs.forEach((inp, i) => {
+    const lx = pad.left + 8 * dpr;
+    const ly = pad.top + 16 * dpr + i * 18 * dpr;
+    ctx.fillStyle = colors[i];
+    ctx.fillRect(lx, ly - 5 * dpr, 10 * dpr, 10 * dpr);
+    ctx.fillStyle = '#f5edd6'; ctx.textAlign = 'left';
+    ctx.fillText(inp.name, lx + 14 * dpr, ly + 4 * dpr);
+  });
+
+  // Influence bars
+  influences.sort((a, b) => b.influence - a.influence);
+  const maxInf = Math.max(...influences.map(i => i.influence), 0.01);
+  const barsDiv = document.getElementById('sens-bars');
+  barsDiv.innerHTML = '';
+  influences.forEach((inf, idx) => {
+    const pct = ((inf.influence / maxInf) * 100).toFixed(0);
+    barsDiv.innerHTML += `
+      <div class="sens-bar-row">
+        <span class="name">${idx + 1}. ${inf.name}</span>
+        <div class="bar-wrap">
+          <div class="bar" style="width:${pct}%;background:${inf.color}"></div>
+        </div>
+        <span class="val">${(inf.influence * 100).toFixed(1)}%</span>
+      </div>
+    `;
+  });
+}
+
+// ========== SCENARIOS ==========
+function buildScenarios() {
+  const list = document.getElementById('scenario-list');
+  list.innerHTML = '';
+  scenarios.forEach(sc => {
+    const div = document.createElement('div');
+    div.className = 'scenario-card' + (sc.id === currentScenario.id ? ' active' : '');
+    div.innerHTML = `
+      <div class="emoji">${sc.emoji}</div>
+      <div class="sc-info">
+        <div class="sc-name">${sc.name}</div>
+        <div class="sc-question">${sc.question}</div>
+      </div>
+    `;
+    div.addEventListener('click', () => switchScenario(sc));
+    list.appendChild(div);
+  });
+}
+
+function switchScenario(sc) {
+  currentScenario = sc;
+  document.getElementById('main-title').textContent = sc.emoji + ' Decision Neuron';
+  document.getElementById('main-tagline').textContent = sc.tagline;
+  document.getElementById('label-yes-btn').textContent = sc.yes;
+  document.getElementById('label-no-btn').textContent = sc.no;
+  buildSliders();
+  buildScenarios();
+  resetTraining();
+  updateAll();
+}
+
+// ===== Custom scenario =====
+function toggleCustom() {
+  document.getElementById('custom-section').classList.toggle('open');
+}
+
+function initCustomForm() {
+  const container = document.getElementById('cs-inputs');
+  container.innerHTML = '';
+  for (let i = 0; i < 3; i++) addCustomInput();
+}
+
+function addCustomInput() {
+  const container = document.getElementById('cs-inputs');
+  if (container.children.length >= 5) return;
+  const idx = container.children.length;
+  const div = document.createElement('div');
+  div.className = 'form-row';
+  div.innerHTML = `
+    <input placeholder="Input ${idx + 1} name">
+    <input type="number" step="0.1" value="${idx % 2 === 1 ? '-1.5' : '1.5'}" style="text-align:center;">
+  `;
+  container.appendChild(div);
+}
+
+function saveCustomScenario() {
+  const title = document.getElementById('cs-title').value || 'Custom Scenario';
+  const emoji = document.getElementById('cs-emoji').value || '✨';
+  const yes = document.getElementById('cs-yes').value || 'Yes';
+  const no = document.getElementById('cs-no').value || 'No';
+  const question = document.getElementById('cs-question').value || 'Should I?';
+  const inputRows = document.getElementById('cs-inputs').querySelectorAll('.form-row');
+  const inputs = [];
+  inputRows.forEach(row => {
+    const [nameEl, weightEl] = row.querySelectorAll('input');
+    if (nameEl.value.trim()) {
+      inputs.push({ name: nameEl.value.trim(), weight: parseFloat(weightEl.value) || 1.0, default: 0.5 });
+    }
+  });
+  if (inputs.length < 2) { alert('Add at least 2 inputs.'); return; }
+
+  const sc = {
+    id: 'custom-' + Date.now(), emoji, name: title, question, yes, no,
+    tagline: `"${question}"`,
+    celebration: `${emoji} Absolutely go for it!`,
+    inputs, bias: 0.0
+  };
+  scenarios.push(sc);
+  switchScenario(sc);
+  document.querySelector('[data-tab="core"]').click();
+}
+
+// ========== INIT ==========
+buildSliders();
+buildChainSliders();
+buildScenarios();
+initCustomForm();
+initTrainCanvas();
+updateAll();
+updateTrainStats();
+
+// Redraw on resize
+window.addEventListener('resize', () => {
+  drawBoundary();
+  if (document.getElementById('tab-training').classList.contains('active')) drawTrainCanvas();
+  if (document.getElementById('tab-sensitivity').classList.contains('active')) drawSensitivity();
+});
+</script>
+
+</body>
+</html>
