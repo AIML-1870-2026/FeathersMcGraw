@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Readable Explorer 🎨</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=JetBrains+Mono:wght@400;600&family=Merriweather&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+:root {
+  --cream: #FFF8F0;
+  --white: #FFFFFF;
+  --dark: #1F2937;
+  --green: #10B981;
+  --amber: #F59E0B;
+  --red: #EF4444;
+  --blue: #3B82F6;
+  --purple: #8B5CF6;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --r: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--dark); min-height: 100vh; }
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* Header */
+.hdr { background: var(--white); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow); position: sticky; top: 0; z-index: 100; }
+.hdr-title { font-family: 'Fredoka One', cursive; font-size: 24px; color: var(--purple); }
+.hdr-stat { display: flex; align-items: center; gap: 8px; }
+.hdr-ratio { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; transition: color 0.3s; }
+.hdr-lbl { font-size: 12px; color: #6B7280; }
+
+/* Layout */
+.layout { display: flex; flex: 1; }
+.sidebar { width: 320px; min-width: 320px; background: var(--white); border-right: 1px solid #E5E7EB; overflow-y: auto; padding-bottom: 24px; }
+.main { flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+
+/* Panel sections */
+.section { padding: 16px; border-bottom: 1px solid #F3F4F6; }
+.sec-title { font-family: 'Fredoka One', cursive; font-size: 16px; color: var(--purple); margin-bottom: 12px; }
+
+/* Color controls */
+.color-ctrl { margin-bottom: 14px; }
+.color-ctrl:last-child { margin-bottom: 0; }
+.ctrl-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.swatch { width: 32px; height: 32px; border-radius: 6px; border: 2px solid #E5E7EB; transition: background 0.3s; flex-shrink: 0; }
+.ctrl-lbl { font-weight: 600; font-size: 14px; flex: 1; }
+.hex { font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #F3F4F6; padding: 2px 6px; border-radius: 4px; color: #6B7280; }
+.ch-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ch-lbl { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; width: 14px; text-align: center; }
+.ch-row input[type=range] { flex: 1; height: 6px; border-radius: 3px; appearance: none; background: #E5E7EB; cursor: pointer; outline: none; }
+.ch-row input[type=range]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--thumb, var(--purple)); cursor: pointer; transition: transform 0.1s; }
+.ch-row input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.num { width: 52px; padding: 3px 6px; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 13px; font-family: 'JetBrains Mono', monospace; text-align: center; outline: none; transition: border-color 0.2s; }
+.num:focus { border-color: var(--purple); }
+
+/* Font size */
+.font-ctrl input[type=range] { width: 100%; margin-bottom: 8px; appearance: none; height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--purple), var(--blue)); cursor: pointer; outline: none; }
+.font-ctrl input[type=range]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--purple); cursor: pointer; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.font-row { display: flex; align-items: center; gap: 8px; }
+.px-lbl { font-size: 13px; color: #6B7280; }
+.size-tag { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; flex: 1; text-align: center; }
+.size-tag.large { background: #D1FAE5; color: #065F46; }
+.size-tag.normal { background: #EDE9FE; color: #5B21B6; }
+
+/* Vision mode */
+.sim-warn { font-size: 12px; color: var(--amber); margin-bottom: 8px; background: #FFFBEB; padding: 6px 8px; border-radius: 6px; }
+.vision-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.v-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border: 2px solid #E5E7EB; border-radius: var(--r); background: var(--white); cursor: pointer; font-size: 11px; font-weight: 500; transition: all 0.2s; }
+.v-btn:hover { border-color: var(--purple); background: #F5F3FF; }
+.v-btn.on { border-color: var(--purple); background: #EDE9FE; color: #5B21B6; }
+.v-btn span:first-child { font-size: 18px; }
+
+/* Presets */
+.presets { display: flex; flex-direction: column; gap: 6px; }
+.p-btn { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 2px solid #E5E7EB; border-radius: var(--r); background: var(--white); cursor: pointer; text-align: left; transition: all 0.2s; width: 100%; }
+.p-btn:hover { border-color: var(--blue); background: #EFF6FF; transform: translateX(2px); }
+.p-btn.active { border-color: var(--purple); background: #EDE9FE; }
+.p-preview { width: 40px; height: 28px; border-radius: 6px; border: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.3s; }
+.p-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.p-name { font-size: 13px; font-weight: 500; }
+.p-cat { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; width: fit-content; }
+.cat-aaa { background: #D1FAE5; color: #065F46; }
+.cat-aa  { background: #DBEAFE; color: #1E40AF; }
+.cat-bdr { background: #FEF3C7; color: #92400E; }
+.cat-fail{ background: #FEE2E2; color: #991B1B; }
+
+/* Preview */
+.preview-box { background: var(--white); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+.preview-top { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #F3F4F6; flex-wrap: wrap; }
+.sample-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.s-btn { padding: 4px 10px; border: 1px solid #E5E7EB; border-radius: 20px; background: #F9FAFB; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.s-btn:hover { background: var(--purple); color: white; border-color: var(--purple); }
+.text-area { width: 100%; min-height: 200px; padding: 32px; border: none; resize: vertical; line-height: 1.6; transition: background 0.3s, color 0.3s; outline: none; font-family: 'Merriweather', serif; }
+
+/* Results */
+.results { display: grid; grid-template-columns: auto 1fr 1fr; gap: 16px; align-items: start; }
+.ratio-box { background: var(--white); border-radius: var(--r); box-shadow: var(--shadow); padding: 20px 24px; text-align: center; }
+.ratio-num { font-family: 'JetBrains Mono', monospace; font-size: 42px; font-weight: 700; transition: color 0.3s; line-height: 1; }
+.ratio-lbl { font-size: 13px; color: #6B7280; margin-top: 4px; }
+.lum-box { background: var(--white); border-radius: var(--r); box-shadow: var(--shadow); padding: 16px; }
+.lum-item { margin-bottom: 12px; }
+.lum-item:last-child { margin-bottom: 0; }
+.lum-lbl { font-size: 12px; color: #6B7280; display: block; margin-bottom: 4px; }
+.lum-val { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; }
+.lum-bar { height: 6px; border-radius: 3px; background: #E5E7EB; margin-top: 4px; position: relative; overflow: hidden; }
+.lum-bar::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: var(--w); background: var(--purple); border-radius: 3px; transition: width 0.3s; }
+.wcag-box { background: var(--white); border-radius: var(--r); box-shadow: var(--shadow); padding: 16px; }
+.wcag-ttl { font-family: 'Fredoka One', cursive; font-size: 14px; color: var(--purple); margin: 8px 0 6px; }
+.wcag-ttl:first-child { margin-top: 0; }
+.badge { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; transition: all 0.3s; }
+.badge.pass { background: #D1FAE5; color: #065F46; }
+.badge.fail { background: #FEE2E2; color: #991B1B; }
+.b-icon { font-size: 16px; font-weight: 700; width: 18px; text-align: center; }
+.b-info { display: flex; flex-direction: column; gap: 1px; }
+.b-lbl { font-size: 13px; font-weight: 600; }
+.b-req { font-size: 11px; opacity: 0.75; }
+
+/* CVD panel */
+.cvd-box { background: var(--white); border-radius: var(--r); box-shadow: var(--shadow); padding: 16px; grid-column: 1 / -1; }
+.cvd-row { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
+.cvd-lbl { font-size: 11px; color: #6B7280; margin-bottom: 4px; }
+.cvd-swatch { width: 60px; height: 40px; border-radius: 8px; border: 2px solid #E5E7EB; transition: background 0.3s; }
+
+/* Footer */
+.ftr { background: var(--white); border-top: 1px solid #E5E7EB; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #6B7280; }
+.ftr a { color: var(--blue); text-decoration: none; }
+.ftr a:hover { text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .results { grid-template-columns: 1fr 1fr; }
+  .ratio-box { grid-column: 1 / -1; }
+  .sidebar { width: 260px; min-width: 260px; }
+}
+@media (max-width: 640px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid #E5E7EB; }
+  .results { grid-template-columns: 1fr; }
+  .ratio-box { grid-column: unset; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+// ── Utilities ──────────────────────────────────────────────────
+function getLuminance(r, g, b) {
+  return [r, g, b].reduce((acc, c, i) => {
+    const s = c / 255;
+    return acc + (s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)) * [0.2126, 0.7152, 0.0722][i];
+  }, 0);
+}
+
+function getContrast(l1, l2) {
+  const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function wcagCheck(ratio, size) {
+  const large = size >= 24;
+  return {
+    AA:  { normal: ratio >= 4.5, large: ratio >= 3.0 },
+    AAA: { normal: ratio >= 7.0, large: ratio >= 4.5 },
+    isLarge: large
+  };
+}
+
+function simulateCVD(r, g, b, type) {
+  const M = {
+    normal:       [[1,0,0],[0,1,0],[0,0,1]],
+    protanopia:   [[0.567,0.433,0],[0.558,0.442,0],[0,0.242,0.758]],
+    deuteranopia: [[0.625,0.375,0],[0.7,0.3,0],[0,0.3,0.7]],
+    tritanopia:   [[0.95,0.05,0],[0,0.433,0.567],[0,0.475,0.525]],
+    monochromacy: [[0.299,0.587,0.114],[0.299,0.587,0.114],[0.299,0.587,0.114]]
+  }[type];
+  const n = [r/255, g/255, b/255];
+  return M.map(row => Math.round(Math.max(0, Math.min(1, row.reduce((s,v,i) => s+v*n[i], 0))) * 255));
+}
+
+function hex(r,g,b) { return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase(); }
+function rgb(r,g,b) { return `rgb(${r},${g},${b})`; }
+function clamp(v,lo,hi) { return Math.max(lo, Math.min(hi, parseInt(v)||lo)); }
+
+// ── Constants ──────────────────────────────────────────────────
+const PRESETS = [
+  { name:"Black on White",  cat:"AAA",  bg:{r:255,g:255,b:255}, txt:{r:0,  g:0,  b:0  } },
+  { name:"White on Black",  cat:"AAA",  bg:{r:0,  g:0,  b:0  }, txt:{r:255,g:255,b:255} },
+  { name:"Dark Navy",       cat:"AAA",  bg:{r:255,g:255,b:255}, txt:{r:0,  g:51, b:102 } },
+  { name:"Link Blue",       cat:"AA",   bg:{r:255,g:255,b:255}, txt:{r:0,  g:0,  b:238 } },
+  { name:"Dark on Cream",   cat:"AA",   bg:{r:255,g:248,b:240}, txt:{r:51, g:51, b:51  } },
+  { name:"Night Mode",      cat:"AA",   bg:{r:30, g:30, b:30 }, txt:{r:230,g:230,b:230 } },
+  { name:"Medium Gray",     cat:"Border",bg:{r:255,g:255,b:255},txt:{r:118,g:118,b:118 } },
+  { name:"Forest Green",    cat:"Border",bg:{r:255,g:255,b:255},txt:{r:34, g:139,b:34  } },
+  { name:"Yellow on White", cat:"Fail", bg:{r:255,g:255,b:255}, txt:{r:255,g:255,b:0  } },
+  { name:"Light Gray",      cat:"Fail", bg:{r:255,g:255,b:255}, txt:{r:200,g:200,b:200 } },
+  { name:"Pastel Purple",   cat:"Fail", bg:{r:255,g:240,b:255}, txt:{r:200,g:150,b:255 } }
+];
+
+const CAT_CLS = { AAA:'cat-aaa', AA:'cat-aa', Border:'cat-bdr', Fail:'cat-fail' };
+
+const SAMPLES = [
+  { lbl:"Pangram",   txt:"The quick brown fox jumps over the lazy dog. PACK MY BOX WITH FIVE DOZEN LIQUOR JUGS. 0123456789" },
+  { lbl:"Lorem",     txt:"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua." },
+  { lbl:"Heading",   txt:"Welcome to Readable Explorer" },
+  { lbl:"Button",    txt:"CALL TO ACTION" },
+  { lbl:"Error",     txt:"⚠️ Error: Please check your input and try again." }
+];
+
+const CVD_MODES = [
+  { id:'normal',       icon:'👁️', lbl:'Normal',       desc:'Standard vision' },
+  { id:'protanopia',   icon:'🔴', lbl:'Protanopia',   desc:'~1% of males — red difficulty' },
+  { id:'deuteranopia', icon:'🟢', lbl:'Deuteranopia', desc:'~1% of males — green difficulty' },
+  { id:'tritanopia',   icon:'🔵', lbl:'Tritanopia',   desc:'<1% population — blue difficulty' },
+  { id:'monochromacy', icon:'⚫', lbl:'Monochromacy', desc:'Rare — complete color blindness' }
+];
+
+// ── Sub-components ─────────────────────────────────────────────
+function RGBSliders({ label, color, onChange }) {
+  const chs = ['r','g','b'];
+  const cols = ['#EF4444','#10B981','#3B82F6'];
+  const set = (ch, v) => onChange({ ...color, [ch]: clamp(v, 0, 255) });
+  return (
+    <div className="color-ctrl">
+      <div className="ctrl-hdr">
+        <div className="swatch" style={{ background: rgb(color.r,color.g,color.b) }} />
+        <span className="ctrl-lbl">{label}</span>
+        <code className="hex">{hex(color.r,color.g,color.b)}</code>
+      </div>
+      {chs.map((ch,i) => (
+        <div key={ch} className="ch-row">
+          <span className="ch-lbl" style={{color:cols[i]}}>{ch.toUpperCase()}</span>
+          <input type="range" min="0" max="255" value={color[ch]}
+            onChange={e=>set(ch,e.target.value)}
+            style={{'--thumb':cols[i]}}
+            aria-label={`${label} ${ch.toUpperCase()}`} />
+          <input type="number" min="0" max="255" value={color[ch]}
+            onChange={e=>set(ch,e.target.value)}
+            className="num"
+            aria-label={`${label} ${ch.toUpperCase()} value`} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Badge({ pass, label, req }) {
+  return (
+    <div className={`badge ${pass?'pass':'fail'}`}>
+      <span className="b-icon">{pass?'✓':'✗'}</span>
+      <div className="b-info">
+        <span className="b-lbl">{label}</span>
+        <span className="b-req">{req}:1 required</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ───────────────────────────────────────────────────
+function App() {
+  const [bg,  setBg]   = useState({r:255,g:255,b:255});
+  const [txt, setTxt]  = useState({r:0,  g:0,  b:0  });
+  const [size, setSize] = useState(16);
+  const [text, setText] = useState(SAMPLES[0].txt);
+  const [mode, setMode] = useState('normal');
+  const [activeP, setActiveP] = useState(null);
+
+  // Apply CVD simulation
+  const simBg  = useMemo(() => { if(mode==='normal') return bg;  const [r,g,b]=simulateCVD(bg.r, bg.g, bg.b, mode);  return {r,g,b}; }, [bg,  mode]);
+  const simTxt = useMemo(() => { if(mode==='normal') return txt; const [r,g,b]=simulateCVD(txt.r,txt.g,txt.b,mode); return {r,g,b}; }, [txt, mode]);
+
+  const bgLum   = useMemo(() => getLuminance(simBg.r,  simBg.g,  simBg.b),  [simBg]);
+  const txtLum  = useMemo(() => getLuminance(simTxt.r, simTxt.g, simTxt.b), [simTxt]);
+  const ratio   = useMemo(() => getContrast(bgLum, txtLum), [bgLum, txtLum]);
+  const wcag    = useMemo(() => wcagCheck(ratio, size),     [ratio, size]);
+
+  const ratioColor = ratio >= 7 ? '#059669' : ratio >= 4.5 ? '#10B981' : ratio >= 3 ? '#F59E0B' : '#EF4444';
+
+  const loadPreset = (p, i) => { setBg(p.bg); setTxt(p.txt); setActiveP(i); setMode('normal'); };
+
+  return (
+    <div className="app">
+      {/* Header */}
+      <header className="hdr">
+        <h1 className="hdr-title">🎨 Readable Explorer</h1>
+        <div className="hdr-stat">
+          <span className="hdr-ratio" style={{color:ratioColor}}>{ratio.toFixed(2)}:1</span>
+          <span className="hdr-lbl">contrast</span>
+        </div>
+      </header>
+
+      <div className="layout">
+        {/* Sidebar */}
+        <aside className="sidebar">
+
+          {/* Colors */}
+          <section className="section">
+            <h2 className="sec-title">🎨 Colors</h2>
+            <RGBSliders label="Background" color={bg}  onChange={c=>{setBg(c); setActiveP(null);}} />
+            <RGBSliders label="Text"       color={txt} onChange={c=>{setTxt(c);setActiveP(null);}} />
+          </section>
+
+          {/* Font Size */}
+          <section className="section">
+            <h2 className="sec-title">📏 Font Size</h2>
+            <div className="font-ctrl">
+              <input type="range" min="12" max="96" value={size}
+                onChange={e=>setSize(clamp(e.target.value,12,96))}
+                aria-label="Font size" />
+              <div className="font-row">
+                <input type="number" min="12" max="96" value={size}
+                  onChange={e=>setSize(clamp(e.target.value,12,96))}
+                  className="num" aria-label="Font size pixels" />
+                <span className="px-lbl">px</span>
+                <span className={`size-tag ${wcag.isLarge?'large':'normal'}`}>
+                  {wcag.isLarge ? '⬆ Large Text' : '· Normal Text'}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* Vision Mode */}
+          <section className="section">
+            <h2 className="sec-title">👁️ Vision Mode</h2>
+            {mode !== 'normal' && <p className="sim-warn">⚠️ Simulated view — approximate</p>}
+            <div className="vision-grid">
+              {CVD_MODES.map(m => (
+                <button key={m.id} className={`v-btn ${mode===m.id?'on':''}`}
+                  onClick={()=>setMode(m.id)} title={m.desc} aria-pressed={mode===m.id}>
+                  <span>{m.icon}</span>
+                  <span>{m.lbl}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* Presets */}
+          <section className="section">
+            <h2 className="sec-title">⚡ Presets</h2>
+            <div className="presets">
+              {PRESETS.map((p,i) => (
+                <button key={i} className={`p-btn ${activeP===i?'active':''}`}
+                  onClick={()=>loadPreset(p,i)}>
+                  <div className="p-preview" style={{background:rgb(p.bg.r,p.bg.g,p.bg.b)}}>
+                    <span style={{color:rgb(p.txt.r,p.txt.g,p.txt.b),fontSize:'10px',fontWeight:700}}>Aa</span>
+                  </div>
+                  <div className="p-info">
+                    <span className="p-name">{p.name}</span>
+                    <span className={`p-cat ${CAT_CLS[p.cat]}`}>{p.cat}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        </aside>
+
+        {/* Main */}
+        <main className="main">
+
+          {/* Text Preview */}
+          <div className="preview-box">
+            <div className="preview-top">
+              <span className="ctrl-lbl">Sample Text:</span>
+              <div className="sample-btns">
+                {SAMPLES.map((s,i) => (
+                  <button key={i} className="s-btn" onClick={()=>setText(s.txt)}>{s.lbl}</button>
+                ))}
+              </div>
+            </div>
+            <textarea className="text-area" value={text}
+              onChange={e=>setText(e.target.value)}
+              style={{
+                background: rgb(simBg.r, simBg.g, simBg.b),
+                color:      rgb(simTxt.r,simTxt.g,simTxt.b),
+                fontSize:   `${size}px`
+              }}
+              aria-label="Sample text preview" />
+          </div>
+
+          {/* Results */}
+          <div className="results">
+
+            {/* Contrast ratio */}
+            <div className="ratio-box">
+              <div className="ratio-num" style={{color:ratioColor}}>{ratio.toFixed(2)}:1</div>
+              <div className="ratio-lbl">Contrast Ratio</div>
+            </div>
+
+            {/* Luminance */}
+            <div className="lum-box">
+              {[['BG Luminance', bgLum], ['Text Luminance', txtLum]].map(([lbl,val]) => (
+                <div key={lbl} className="lum-item">
+                  <span className="lum-lbl">{lbl}</span>
+                  <code className="lum-val">{val.toFixed(3)}</code>
+                  <div className="lum-bar" style={{'--w': `${(val*100).toFixed(1)}%`}} />
+                </div>
+              ))}
+            </div>
+
+            {/* WCAG Badges */}
+            <div className="wcag-box">
+              <h3 className="wcag-ttl">WCAG AA</h3>
+              <Badge pass={wcag.AA.normal}  label="Normal Text" req="4.5" />
+              <Badge pass={wcag.AA.large}   label="Large Text"  req="3.0" />
+              <h3 className="wcag-ttl">WCAG AAA</h3>
+              <Badge pass={wcag.AAA.normal} label="Normal Text" req="7.0" />
+              <Badge pass={wcag.AAA.large}  label="Large Text"  req="4.5" />
+            </div>
+
+            {/* CVD swatches */}
+            {mode !== 'normal' && (
+              <div className="cvd-box">
+                <h3 className="wcag-ttl">Color Simulation: {CVD_MODES.find(m=>m.id===mode)?.lbl}</h3>
+                <div className="cvd-row">
+                  {[['Original BG',   rgb(bg.r, bg.g, bg.b)],
+                    ['Simulated BG',  rgb(simBg.r,  simBg.g,  simBg.b)],
+                    ['Original Text', rgb(txt.r,txt.g,txt.b)],
+                    ['Simulated Text',rgb(simTxt.r, simTxt.g, simTxt.b)]
+                  ].map(([lbl,col]) => (
+                    <div key={lbl}>
+                      <div className="cvd-lbl">{lbl}</div>
+                      <div className="cvd-swatch" style={{background:col}} title={col} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      <footer className="ftr">
+        <span>Readable Explorer — AIML 1870 · FeathersMcGraw</span>
+        <span>
+          <a href="https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html" target="_blank" rel="noopener">WCAG 2.1</a>
+          {' · '}
+          <a href="https://webaim.org/resources/contrastchecker/" target="_blank" rel="noopener">WebAIM Checker</a>
+        </span>
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
