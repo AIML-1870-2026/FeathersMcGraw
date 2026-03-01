@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Run 2 Clone</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:system-ui,sans-serif; }
+#gameCanvas { position:fixed; top:0; left:0; width:100%; height:100%; z-index:1; }
+#ui-root { position:fixed; top:0; left:0; width:100%; height:100%; z-index:100; pointer-events:none; }
+.game-screen {
+  display:none; position:absolute; top:0; left:0; width:100%; height:100%;
+  align-items:center; justify-content:center; flex-direction:column;
+  pointer-events:all; gap:14px;
+}
+.screen-active { display:flex; }
+.menu-bg { background:radial-gradient(ellipse at 50% 40%, #0a0a2e 0%, #000005 100%); }
+.overlay-bg { background:rgba(0,0,10,0.88); }
+.title { font-size:80px; font-weight:900; letter-spacing:6px; color:#fff;
+  text-shadow:0 0 40px rgba(80,140,255,0.9),0 0 80px rgba(80,140,255,0.4);
+  margin-bottom:6px; }
+.subtitle { font-size:18px; color:rgba(255,255,255,0.5); margin-bottom:30px; letter-spacing:2px; }
+.screen-title { font-size:40px; font-weight:800; color:#fff;
+  text-shadow:0 0 20px rgba(100,180,255,0.7); margin-bottom:20px; letter-spacing:3px; }
+.btn {
+  padding:13px 44px; font-size:17px; font-weight:700; color:#fff; letter-spacing:1px;
+  background:linear-gradient(135deg,#3355cc,#7722aa); border:none; border-radius:8px;
+  cursor:pointer; transition:transform .1s,filter .1s; min-width:210px;
+  box-shadow:0 4px 20px rgba(50,80,200,0.4);
+}
+.btn:hover { transform:scale(1.06); filter:brightness(1.25); }
+.btn:active { transform:scale(0.96); }
+.btn-sm { padding:10px 28px; font-size:15px; min-width:160px; }
+.btn-danger { background:linear-gradient(135deg,#882200,#cc4400); }
+.btn-secondary { background:linear-gradient(135deg,#334,#556); }
+.level-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; padding:10px; }
+.lvl-btn {
+  width:90px; height:90px; border-radius:12px; border:2px solid rgba(255,255,255,0.25);
+  background:rgba(255,255,255,0.07); cursor:pointer; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; color:#fff; transition:all .18s;
+  font-size:12px; gap:3px;
+}
+.lvl-btn:hover:not(.locked) { transform:scale(1.1); border-color:#88aaff; background:rgba(100,140,255,0.2); }
+.lvl-btn .lnum { font-size:30px; font-weight:900; }
+.lvl-btn.locked { opacity:.35; cursor:not-allowed; }
+.lvl-deaths { color:#aaa; font-size:11px; }
+.hud-el { position:absolute; color:#fff; font-weight:700;
+  text-shadow:1px 1px 4px rgba(0,0,0,0.9); pointer-events:none; }
+.slider-row { display:flex; align-items:center; gap:14px; width:360px; margin:6px 0; }
+.slider-row label { flex:1; color:#ddd; font-size:15px; }
+.slider-row input[type=range] { width:140px; accent-color:#88aaff; }
+.slider-val { color:#aaa; font-size:13px; width:36px; text-align:right; }
+.toggle-row { display:flex; align-items:center; gap:14px; width:360px; margin:6px 0; }
+.toggle-row label { flex:1; color:#ddd; font-size:15px; }
+.hint-box {
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18);
+  border-radius:10px; padding:14px 24px; font-size:15px; color:#ccc;
+  max-width:420px; text-align:center; line-height:1.6;
+}
+.key-badge {
+  display:inline-block; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);
+  border-radius:5px; padding:2px 10px; font-family:monospace; font-size:14px; color:#fff;
+}
+.stat-line { color:rgba(255,255,255,0.45); font-size:14px; }
+#death-flash {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(255,30,0,0.38); pointer-events:none; opacity:0;
+  transition:opacity .12s; z-index:200;
+}
+#death-popup {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:rgba(0,0,0,0.85); border:2px solid #cc2200; border-radius:10px;
+  padding:16px 36px; color:#ff6644; font-size:22px; font-weight:700;
+  display:none; z-index:201; text-align:center;
+}
+@keyframes pulseTitle {
+  0%,100% { text-shadow:0 0 40px rgba(80,140,255,0.9),0 0 80px rgba(80,140,255,0.4); }
+  50% { text-shadow:0 0 60px rgba(120,180,255,1),0 0 120px rgba(80,140,255,0.6); }
+}
+.title { animation:pulseTitle 3s ease-in-out infinite; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+#screen-stars { position:absolute; top:0;left:0;width:100%;height:100%;overflow:hidden;pointer-events:none; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui-root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════
+// GLOBAL GAME STATE
+// ═══════════════════════════════════════════
+window.GameState = {
+  rendering: { scene:null, camera:null, renderer:null, player:null, currentSurface:0 },
+  gameplay: { mode:'menu', currentLevel:1, isPaused:false, isGameOver:false, playerAlive:true },
+  stats: { deaths:0, distance:0, levelDeaths:{} },
+  settings: { sfxVolume:80, musicVolume:60, showControls:true },
+  progression: { highestUnlocked:1, infiniteHighScore:0 }
+};
+
+// ═══════════════════════════════════════════
+// GAME ENGINE – Physics, Rendering, Input
+// ═══════════════════════════════════════════
+(function(){
+'use strict';
+const TH=4, TD=2, PSPD=12.48, LSPD=7.8, JUMPV=11, GRAV=30, POFF=0.6, COYOTE=0.15;
+
+// Surface config: [standAxis, standVal, latAxis, latSign, gravSign, camOff]
+// gravSign: direction that perpPos changes under gravity (+1 or -1)
+// ls (lateral sign): which world direction is "screen right" on this surface
+//   Floor  (surf 0): screen-right = +x  →  ls=+1
+//   Right wall (1):  screen-right = +y  →  ls=+1  (camera.up=[-1,0,0], right=cross(up,look)≈+y)
+//   Ceiling (2):     screen-right = -x  →  ls=-1  (camera upside-down, right≈-x)
+//   Left wall (3):   screen-right = -y  →  ls=-1  (camera.up=[+1,0,0], right=cross(up,look)≈-y)
+const S=[
+  {sa:'y',sv:POFF,       la:'x',ls:1,  gs:-1, up:[0,1,0],  cam:[0,2.5,-6]},  //0 floor
+  {sa:'x',sv:TH-POFF,    la:'y',ls:1,  gs:1,  up:[-1,0,0], cam:[-2.5,0,-6]}, //1 right wall
+  {sa:'y',sv:TH*2-POFF,  la:'x',ls:-1, gs:1,  up:[0,-1,0], cam:[0,-2.5,-6]}, //2 ceiling
+  {sa:'x',sv:-(TH-POFF), la:'y',ls:-1, gs:-1, up:[1,0,0],  cam:[2.5,0,-6]},  //3 left wall
+];
+// Void thresholds [axis, sign, threshold]
+const VOID=[[{a:'y',s:-1,t:-7}],[{a:'x',s:1,t:TH+7}],[{a:'y',s:1,t:TH*2+7}],[{a:'x',s:-1,t:-(TH+7)}]];
+
+let scene, camera, renderer, clock;
+let playerGroup, pLegs=[], pArms=[];
+let px=0, py=POFF, pz=2;
+let pvPerp=0;
+let grounded=true, dead=false, surf=0;
+let transiting=false, transT=0, transDur=0.4, edgeCooldown=0, wasAboveSurf=false, coyoteTimer=0;
+let camUpFrom=new THREE.Vector3(0,1,0), camUpTo=new THREE.Vector3(0,1,0), camUp=new THREE.Vector3(0,1,0);
+const _zAxis=new THREE.Vector3(0,0,1);
+const surfQuat=[0,Math.PI/2,Math.PI,-Math.PI/2].map(a=>new THREE.Quaternion().setFromAxisAngle(_zAxis,a));
+let playerRotFrom=new THREE.Quaternion(), playerRotTo=new THREE.Quaternion(), playerQuat=new THREE.Quaternion();
+// Pre-allocated reusables — avoid per-frame GC pressure
+const _obsBox=new THREE.Box3(), _playerBox=new THREE.Box3();
+const _camTP=new THREE.Vector3();
+const _particleGeo=new THREE.SphereGeometry(.08,4,4);
+let currentCol=0;
+const KEYS={};
+let activeTiles=[], activeObstacles=[], particles=[];
+let curLevelData=null, levelSegs=null;
+let infiniteSegs=[], runAnim=0;
+let playerVisible=true, deathTimer=0;
+
+function pp()  { return S[surf].sa==='y'?py:px; }
+function setpp(v){ if(S[surf].sa==='y') py=v; else px=v; }
+function lp()  { return S[surf].la==='x'?px:py; }
+function setlp(v){ if(S[surf].la==='x') px=v; else py=v; }
+
+function getSolid(col){
+  const segs = GameState.gameplay.mode==='infinite' ? infiniteSegs : levelSegs;
+  if(!segs) return true;
+  if(col<0) return true;
+  if(col>=segs.length) return false;
+  return segs[col][surf]===1;
+}
+
+function updatePhysics(dt){
+  if(GameState.gameplay.isPaused||dead) return;
+
+  // Auto-run
+  pz += PSPD*dt;
+  currentCol=Math.floor(pz/TD);
+
+  // Lateral input
+  if(edgeCooldown>0) edgeCooldown-=dt;
+  let li=0;
+  if(KEYS['ArrowLeft']||KEYS['a']||KEYS['A']) li-=1;
+  if(KEYS['ArrowRight']||KEYS['d']||KEYS['D']) li+=1;
+  if(li!==0 && !transiting){
+    const move = -li*S[surf].ls*LSPD*dt;
+    setlp(lp()+move);
+    if(edgeCooldown<=0) edgeCheck();
+  }
+
+  // Perpendicular physics
+  const col = currentCol;
+  if(!grounded){
+    if(coyoteTimer>0) coyoteTimer-=dt;
+    pvPerp += S[surf].gs*GRAV*dt;
+    const newpp = pp()+pvPerp*dt;
+    setpp(newpp);
+    // Track whether the player has risen above the surface plane (only true after a real jump)
+    if(!wasAboveSurf && S[surf].gs*(S[surf].sv-pp())>0) wasAboveSurf=true;
+    // Landing check — only land if the player actually went airborne above the surface first
+    const atSurf = S[surf].gs<0 ? newpp<=S[surf].sv+0.05 : newpp>=S[surf].sv-0.05;
+    if(atSurf && wasAboveSurf){
+      if(getSolid(col)){
+        setpp(S[surf].sv); pvPerp=0; grounded=true; wasAboveSurf=false;
+        window.dispatchEvent(new CustomEvent('player:landed',{detail:{surface:surf}}));
+        window.dispatchEvent(new CustomEvent('sound:land'));
+        spawnParticles('land');
+      }
+    }
+    // Void check
+    const vd=VOID[surf][0];
+    const vv = vd.a==='y'?py:px;
+    if(vd.s>0?vv>vd.t:vv<vd.t){ die(); return; }
+  } else {
+    // Confirm still grounded
+    if(!getSolid(col)){
+      grounded=false; wasAboveSurf=false;
+      if(coyoteTimer<=0) coyoteTimer=COYOTE; // grace window to still jump
+    }
+    // Jump (normal or within coyote window)
+    if((KEYS[' ']||KEYS['ArrowUp']||KEYS['w']||KEYS['W'])&&(grounded||coyoteTimer>0)&&!transiting){
+      pvPerp = -S[surf].gs*JUMPV;
+      grounded=false; wasAboveSurf=false; coyoteTimer=0;
+      window.dispatchEvent(new CustomEvent('sound:jump'));
+      spawnParticles('jump');
+    }
+  }
+
+  // Cull tiles far behind player in infinite mode
+  cullOldTiles();
+  // Gravity flip check
+  checkGravFlip();
+  // Obstacle collision
+  checkObstacles();
+  // Obstacle animation
+  animObstacles(dt);
+  // Particles
+  animParticles(dt);
+
+  // Level complete check
+  if(GameState.gameplay.mode==='level'&&levelSegs&&pz>levelSegs.length*TD){
+    window.dispatchEvent(new CustomEvent('level:complete'));
+  }
+
+  // Player mesh
+  if(playerGroup){
+    playerGroup.position.set(px,py,pz);
+    playerGroup.quaternion.copy(playerQuat);
+    playerGroup.visible=playerVisible;
+    if(grounded){ runAnim+=dt*6; animPlayer(); }
+  }
+  GameState.rendering.currentSurface=surf;
+  updateCamera(dt);
+}
+
+function edgeCheck(){
+  if(transiting) return;
+  const l=lp();
+  switch(surf){
+    case 0: if(l>3.8) beginTransit(1); else if(l<-3.8) beginTransit(3); break;
+    case 1: if(l<0.2) beginTransit(0); else if(l>7.8) beginTransit(2); break;
+    case 2: if(l<-3.8) beginTransit(3); else if(l>3.8) beginTransit(1); break;
+    case 3: if(l>7.8) beginTransit(2); else if(l<0.2) beginTransit(0); break;
+  }
+}
+
+function beginTransit(ns){
+  if(transiting) return;
+  transiting=true; transT=0;
+  camUpFrom.copy(camUp);
+  camUpTo.fromArray(S[ns].up);
+  playerRotFrom.copy(playerQuat);
+  playerRotTo.copy(surfQuat[ns]);
+  surf=ns;
+  setpp(S[ns].sv);
+  pvPerp=0; grounded=true;
+  edgeCooldown=0.35; // prevent immediate re-transition after arriving
+  GameState.rendering.currentSurface=ns;
+  window.dispatchEvent(new CustomEvent('sound:surface'));
+}
+
+function checkGravFlip(){
+  if(!curLevelData?.obstacles) return;
+  const col=currentCol;
+  for(const obs of curLevelData.obstacles){
+    if(obs.type==='gravFlip'&&Math.abs(obs.segmentZ-col)<1&&obs.surface===surf){
+      beginTransit((surf+2)%4); return;
+    }
+  }
+}
+
+function checkObstacles(){
+  if(dead) return;
+  _playerBox.min.set(px-.35,py-.35,pz-.35);
+  _playerBox.max.set(px+.35,py+.35,pz+.35);
+  for(const obj of activeObstacles){
+    if(!obj.mesh||!obj.mesh.visible||obj.type==='gravFlip'||obj.type==='portal') continue;
+    _obsBox.setFromObject(obj.mesh);
+    if(_obsBox.intersectsBox(_playerBox)){ die(); return; }
+  }
+}
+
+function animObstacles(dt){
+  for(const obj of activeObstacles){
+    if(!obj.mesh) continue;
+    if(obj.type==='rotating'||obj.type==='portal') obj.mesh.rotation.z+=obj.speed*dt;
+    if(obj.type==='oscillating'){
+      obj.t+=dt;
+      const off=Math.sin(obj.t*obj.freq*Math.PI*2)*obj.amplitude;
+      if(obj.axis==='x') obj.mesh.position.x=obj.bx+off;
+      else obj.mesh.position.y=obj.by+off;
+    }
+  }
+}
+
+function die(){
+  if(dead) return;
+  dead=true; playerVisible=false;
+  spawnParticles('death');
+  window.dispatchEvent(new CustomEvent('player:death'));
+  window.dispatchEvent(new CustomEvent('sound:death'));
+}
+
+function updateCamera(dt){
+  if(!camera) return;
+  if(transiting){
+    transT+=dt;
+    const t=Math.min(transT/transDur,1);
+    const e=t<.5?2*t*t:-1+(4-2*t)*t;
+    camUp.lerpVectors(camUpFrom,camUpTo,e);
+    playerQuat.slerpQuaternions(playerRotFrom,playerRotTo,e);
+    if(t>=1){ transiting=false; camUp.copy(camUpTo); playerQuat.copy(surfQuat[surf]); }
+  } else { camUp.fromArray(S[surf].up); playerQuat.copy(surfQuat[surf]); }
+  camera.up.copy(camUp);
+  const off=S[surf].cam;
+  _camTP.set(px+off[0],py+off[1],pz+off[2]);
+  camera.position.lerp(_camTP,1-Math.exp(-9*dt));
+  camera.lookAt(px,py,pz-2);
+  // Dynamic FOV: ramps up with distance in infinite mode
+  const targetFOV = GameState.gameplay.mode==='infinite'
+    ? 75 + Math.min(GameState.stats.distance * 0.018, 18)
+    : 75;
+  if(Math.abs(camera.fov-targetFOV)>0.05){
+    camera.fov += (targetFOV-camera.fov)*0.06;
+    camera.updateProjectionMatrix();
+  }
+}
+
+function spawnParticles(type){
+  const configs={
+    land:{n:8,col:0xaaccff,life:.6,spd:3},
+    jump:{n:4,col:0xffffff,life:.4,spd:2},
+    death:{n:15,col:0xff4422,life:1.2,spd:4}
+  };
+  const c=configs[type]; if(!c) return;
+  for(let i=0;i<c.n;i++){
+    const angle=type==='death'?(i/c.n)*Math.PI*2:0;
+    const m=new THREE.MeshBasicMaterial({color:c.col,transparent:true});
+    const mesh=new THREE.Mesh(_particleGeo,m);
+    mesh.position.set(px,py,pz);
+    scene.add(mesh);
+    const vx=type==='death'?Math.cos(angle)*c.spd:(Math.random()-.5)*c.spd;
+    const vy=type==='death'?Math.sin(angle)*c.spd:(Math.random()-.5)*c.spd;
+    const vz=(Math.random()-.5)*c.spd;
+    particles.push({mesh,vx,vy,vz,life:c.life,maxLife:c.life});
+  }
+}
+
+function animParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.life-=dt;
+    if(p.life<=0){
+      scene.remove(p.mesh);
+      p.mesh.material.dispose();
+      particles.splice(i,1);
+      continue;
+    }
+    p.mesh.position.x+=p.vx*dt;
+    p.mesh.position.y+=p.vy*dt;
+    p.mesh.position.z+=p.vz*dt;
+    p.vy-=8*dt;
+    const a=p.life/p.maxLife;
+    p.mesh.material.opacity=a;
+    p.mesh.scale.setScalar(a*.8+.2);
+  }
+}
+
+function animPlayer(){
+  const s=Math.sin(runAnim);
+  if(pLegs[0]) pLegs[0].rotation.x=s*.45;
+  if(pLegs[1]) pLegs[1].rotation.x=-s*.45;
+  if(pArms[0]) pArms[0].rotation.x=-s*.3;
+  if(pArms[1]) pArms[1].rotation.x=s*.3;
+  if(playerGroup){ const u=S[surf].up; playerGroup.position.x+=u[0]*Math.abs(s)*.04; playerGroup.position.y+=u[1]*Math.abs(s)*.04; }
+}
+
+function createPlayer(){
+  playerGroup=new THREE.Group();
+  const bm=new THREE.MeshLambertMaterial({color:0xffffff});
+  const hm=new THREE.MeshLambertMaterial({color:0xffddbb});
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),hm);
+  head.position.y=.7; playerGroup.add(head);
+  const torso=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,.5,8),bm);
+  torso.position.y=.25; playerGroup.add(torso);
+  const ag=new THREE.CylinderGeometry(.06,.06,.4,6);
+  const la=new THREE.Mesh(ag,bm); la.position.set(-.25,.32,0); la.rotation.z=.5;
+  const ra=new THREE.Mesh(ag.clone(),bm); ra.position.set(.25,.32,0); ra.rotation.z=-.5;
+  playerGroup.add(la); playerGroup.add(ra);
+  pArms=[la,ra];
+  const lg=new THREE.CylinderGeometry(.07,.07,.45,6);
+  const ll=new THREE.Mesh(lg,bm); ll.position.set(-.12,-.18,0);
+  const rl=new THREE.Mesh(lg.clone(),bm); rl.position.set(.12,-.18,0);
+  playerGroup.add(ll); playerGroup.add(rl);
+  pLegs=[ll,rl];
+  playerGroup.visible=false;
+  scene.add(playerGroup);
+  GameState.rendering.player=playerGroup;
+}
+
+function makeTile(col,sf){
+  const z=col*TD+TD/2;
+  let geo,pos;
+  const colors=curLevelData?.colors;
+  const p=colors?.primary??0x2255cc, s=colors?.secondary??0x7733bb;
+  const mat=new THREE.MeshLambertMaterial({color:(sf===0||sf===2)?p:s});
+  if(sf===0){  geo=new THREE.BoxGeometry(TH*2,.4,TD); pos=[0,-.2,z]; }
+  else if(sf===1){ geo=new THREE.BoxGeometry(.4,TH*2,TD); pos=[TH+.2,TH,z]; }
+  else if(sf===2){ geo=new THREE.BoxGeometry(TH*2,.4,TD); pos=[0,TH*2+.2,z]; }
+  else{ geo=new THREE.BoxGeometry(.4,TH*2,TD); pos=[-(TH+.2),TH,z]; }
+  const m=new THREE.Mesh(geo,mat);
+  m.position.set(...pos);
+  return m;
+}
+
+function buildTiles(segs){
+  for(let c=0;c<segs.length;c++){
+    for(let sf=0;sf<4;sf++){
+      if(segs[c][sf]){
+        const m=makeTile(c,sf);
+        scene.add(m);
+        activeTiles.push(m);
+      }
+    }
+  }
+}
+
+function buildLevelEndPortal(segCount){
+  const z=segCount*TD-TD/2;
+  // Outer ring
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(1.8,.12,10,48),
+    new THREE.MeshBasicMaterial({color:0x00ffcc})
+  );
+  ring.position.set(0,TH,z);
+  scene.add(ring);
+  // Inner translucent disc
+  const disc=new THREE.Mesh(
+    new THREE.CircleGeometry(1.65,32),
+    new THREE.MeshBasicMaterial({color:0x00ffcc,transparent:true,opacity:.18,side:THREE.DoubleSide})
+  );
+  disc.position.set(0,TH,z+0.05);
+  scene.add(disc);
+  activeTiles.push(disc);
+  // Register ring for spin animation
+  activeObstacles.push({mesh:ring,type:'portal',speed:0.9});
+}
+
+function buildObstacles(obstacles){
+  for(const obs of obstacles||[]){
+    const z=obs.segmentZ*TD+TD/2;
+    if(obs.type==='gravFlip'){
+      const geo=new THREE.BoxGeometry(TH*2,.5,TD);
+      const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x00ffaa}));
+      m.position.set(0,-.05,z);
+      scene.add(m);
+      activeObstacles.push({mesh:m,type:'gravFlip',data:obs});
+    } else if(obs.type==='rotating'){
+      const geo=new THREE.BoxGeometry(6,.3,.3);
+      const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0xff4400}));
+      m.position.set(0,TH,z);
+      scene.add(m);
+      activeObstacles.push({mesh:m,type:'rotating',speed:obs.speed||1.5});
+    } else if(obs.type==='oscillating'){
+      const geo=new THREE.BoxGeometry(.6,TH*2,TD*.8);
+      const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0xff8800}));
+      const bx=obs.baseX||0, by=TH;
+      m.position.set(bx,by,z);
+      scene.add(m);
+      activeObstacles.push({mesh:m,type:'oscillating',bx,by,axis:obs.axis||'x',amplitude:obs.amplitude||1.5,freq:obs.freq||0.8,t:0});
+    }
+  }
+}
+
+function createStarfield(){
+  const g=new THREE.BufferGeometry();
+  const v=[];
+  for(let i=0;i<800;i++) v.push((Math.random()-.5)*300,(Math.random()-.5)*300,(Math.random()-.5)*300);
+  g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:.4})));
+}
+
+function cullOldTiles(){
+  if(GameState.gameplay.mode!=='infinite') return;
+  const cutoff=pz-50;
+  for(let i=activeTiles.length-1;i>=0;i--){
+    const t=activeTiles[i];
+    if(t.position.z<cutoff){
+      scene.remove(t);
+      t.geometry.dispose();
+      t.material.dispose();
+      activeTiles.splice(i,1);
+    }
+  }
+}
+
+function clearLevel(){
+  activeTiles.forEach(m=>{scene.remove(m);m.geometry.dispose();m.material.dispose();});
+  activeTiles=[];
+  activeObstacles.forEach(o=>{if(o.mesh){scene.remove(o.mesh);o.mesh.geometry.dispose();o.mesh.material.dispose();}});
+  activeObstacles=[];
+  particles.forEach(p=>scene.remove(p.mesh));
+  particles=[];
+  levelSegs=null; curLevelData=null; infiniteSegs=[];
+}
+
+function resetPlayer(){
+  px=0; py=POFF; pz=2;
+  pvPerp=0; grounded=true; dead=false; surf=0;
+  transiting=false; transT=0; edgeCooldown=0; playerVisible=true; runAnim=0; wasAboveSurf=false; coyoteTimer=0;
+  currentCol=Math.floor(pz/TD);
+  camUp.set(0,1,0); camUpFrom.set(0,1,0); camUpTo.set(0,1,0);
+  playerQuat.copy(surfQuat[0]);
+  GameState.rendering.currentSurface=0;
+  if(playerGroup){
+    playerGroup.position.set(px,py,pz);
+    playerGroup.quaternion.copy(playerQuat);
+    playerGroup.visible=true;
+  }
+  if(camera){
+    camera.up.set(0,1,0);
+    camera.position.set(px,py+2.5,pz-6);
+    camera.lookAt(px,py,pz-2);
+    camera.updateMatrixWorld(true);
+  }
+}
+
+let animId;
+function renderLoop(){
+  animId=requestAnimationFrame(renderLoop);
+  const dt=Math.min(clock.getDelta(),.05);
+  if(GameState.gameplay.mode!=='menu'&&!GameState.gameplay.isPaused){
+    updatePhysics(dt);
+    window.GameLogic?.updateGameState(dt);
+  }
+  if(renderer&&scene&&camera) renderer.render(scene,camera);
+}
+
+window.addEventListener('game:start',(e)=>{
+  const d=e.detail?.levelData; if(!d) return;
+  clearLevel(); resetPlayer();
+  curLevelData=d;
+  if(d.colors){
+    if(scene.fog) scene.fog.color.setHex(d.colors.fogColor||0x000011);
+    if(scene.background) scene.background.setHex(d.colors.fogColor||0x000011);
+  }
+  if(d.segments){ levelSegs=d.segments; infiniteSegs=[]; buildTiles(d.segments); buildLevelEndPortal(d.segments.length); }
+  if(d.obstacles) buildObstacles(d.obstacles);
+  playerGroup.visible=true;
+});
+
+window.addEventListener('game:reset',()=>{
+  resetPlayer();
+  if(playerGroup) playerGroup.visible=true;
+});
+window.addEventListener('game:pause',()=>{ clock.getDelta(); });
+window.addEventListener('game:resume',()=>{ clock.getDelta(); });
+
+window.addEventListener('engine:infiniteSegments',(e)=>{
+  if(e.detail?.segs) infiniteSegs.push(...e.detail.segs);
+  // Build tiles for new segs
+  const start=infiniteSegs.length-e.detail.segs.length;
+  for(let c=start;c<infiniteSegs.length;c++){
+    for(let sf=0;sf<4;sf++){
+      if(infiniteSegs[c][sf]){
+        const m=makeTile(c,sf);
+        scene.add(m); activeTiles.push(m);
+      }
+    }
+  }
+});
+
+window.GameEngine={
+  init(){
+    scene=new THREE.Scene();
+    scene.background=new THREE.Color(0x000011);
+    scene.fog=new THREE.FogExp2(0x000011,.022);
+    camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,300);
+    camera.position.set(0,2.5,-4); camera.lookAt(0,0,0);
+    renderer=new THREE.WebGLRenderer({canvas:document.getElementById('gameCanvas'),antialias:true,powerPreference:'high-performance'});
+    renderer.setSize(innerWidth,innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    scene.add(new THREE.AmbientLight(0xffffff,.65));
+    const dl=new THREE.DirectionalLight(0xffffff,.8); dl.position.set(5,10,5); scene.add(dl);
+    createStarfield(); createPlayer();
+    clock=new THREE.Clock();
+    GameState.rendering.scene=scene; GameState.rendering.camera=camera; GameState.rendering.renderer=renderer;
+    window.addEventListener('keydown',(e)=>{
+      KEYS[e.key]=true;
+      if(e.key==='Escape'&&GameState.gameplay.mode!=='menu'){
+        window.dispatchEvent(new CustomEvent(GameState.gameplay.isPaused?'game:resume':'game:pause'));
+      }
+      if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+    });
+    window.addEventListener('keyup',(e)=>{ KEYS[e.key]=false; });
+    window.addEventListener('resize',()=>{
+      camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth,innerHeight);
+    });
+    renderLoop();
+  },
+  startLevel(ld){ window.dispatchEvent(new CustomEvent('game:start',{detail:{levelData:ld}})); },
+  resetPlayer(){ resetPlayer(); },
+  updatePhysics(dt){ updatePhysics(dt); },
+  getCameraPosition(){ return camera?{x:camera.position.x,y:camera.position.y,z:camera.position.z}:{x:0,y:0,z:0}; },
+  destroyLevel(){ clearLevel(); }
+};
+})(); // end Engine
+
+
+// ═══════════════════════════════════════════
+// GAME LOGIC – Levels, State, Infinite Mode
+// ═══════════════════════════════════════════
+(function(){
+'use strict';
+const TD=2, PSPD=12.48;
+
+function mkSegs(len,gaps){
+  const s=[];
+  for(let i=0;i<len;i++) s.push([1,1,1,1]);
+  for(const g of gaps||[]){
+    for(let i=g.z;i<Math.min(g.z+g.w,len);i++) s[i][g.s]=0;
+  }
+  return s;
+}
+
+const LEVELS=[null, // index 0 unused
+  // s=0:floor  s=1:right  s=2:ceiling  s=3:left
+  // Singles only first half, doubles second half — tighter spacing, width 3
+  { id:1,name:'Level 1',
+    colors:{primary:0x2255cc,secondary:0x7733bb,fogColor:0x000011},
+    segments:mkSegs(75,[
+      {z:7,s:0,w:3},
+      {z:14,s:1,w:3},
+      {z:21,s:2,w:2},
+      {z:28,s:3,w:3},
+      {z:35,s:0,w:3},
+      {z:43,s:1,w:2},{z:43,s:2,w:3},
+      {z:51,s:3,w:3},{z:51,s:0,w:2},
+      {z:59,s:2,w:3},{z:59,s:3,w:2},
+      {z:67,s:0,w:3}
+    ]),obstacles:[]
+  },
+  // All doubles from start, triple at end, width 3
+  { id:2,name:'Level 2',
+    colors:{primary:0x116644,secondary:0x228855,fogColor:0x001108},
+    segments:mkSegs(85,[
+      {z:6,s:0,w:3},
+      {z:13,s:1,w:3},
+      {z:20,s:0,w:3},{z:20,s:1,w:3},
+      {z:28,s:2,w:3},{z:28,s:3,w:3},
+      {z:36,s:0,w:3},{z:36,s:2,w:3},
+      {z:44,s:1,w:3},{z:44,s:3,w:3},
+      {z:52,s:0,w:4},{z:52,s:2,w:3},
+      {z:60,s:1,w:3},{z:60,s:3,w:4},
+      {z:68,s:0,w:3},{z:68,s:1,w:3},
+      {z:76,s:0,w:3},{z:76,s:2,w:3},{z:76,s:3,w:3}
+    ]),obstacles:[]
+  },
+  // Doubles + many triples (5+), width 3-4
+  { id:3,name:'Level 3',
+    colors:{primary:0xbb5500,secondary:0xdd8800,fogColor:0x110500},
+    segments:mkSegs(92,[
+      {z:5,s:0,w:3},{z:5,s:1,w:3},
+      {z:13,s:2,w:3},{z:13,s:3,w:3},
+      {z:21,s:0,w:4},{z:21,s:1,w:3},
+      {z:29,s:0,w:3},{z:29,s:2,w:3},{z:29,s:3,w:3},
+      {z:37,s:1,w:3},{z:37,s:2,w:3},
+      {z:45,s:0,w:4},{z:45,s:1,w:3},{z:45,s:2,w:4},
+      {z:54,s:2,w:3},{z:54,s:3,w:4},
+      {z:62,s:0,w:3},{z:62,s:1,w:4},{z:62,s:3,w:3},
+      {z:71,s:0,w:4},{z:71,s:2,w:3},{z:71,s:3,w:4},
+      {z:80,s:1,w:3},{z:80,s:2,w:3},
+      {z:85,s:0,w:3},{z:85,s:1,w:3},{z:85,s:3,w:3}
+    ]),
+    obstacles:[{type:'gravFlip',segmentZ:26,surface:0},{type:'gravFlip',segmentZ:50,surface:0}]
+  },
+  // All triples from start, width 4 — 1 valid surface from the beginning
+  { id:4,name:'Level 4',
+    colors:{primary:0xaa1166,secondary:0x881199,fogColor:0x0a0009},
+    segments:mkSegs(100,[
+      {z:4,s:0,w:4},{z:4,s:1,w:4},{z:4,s:2,w:3},
+      {z:11,s:0,w:3},{z:11,s:2,w:4},{z:11,s:3,w:3},
+      {z:18,s:1,w:4},{z:18,s:2,w:3},{z:18,s:3,w:4},
+      {z:26,s:0,w:4},{z:26,s:1,w:4},{z:26,s:3,w:3},
+      {z:34,s:0,w:3},{z:34,s:1,w:4},{z:34,s:2,w:4},
+      {z:42,s:0,w:4},{z:42,s:2,w:4},{z:42,s:3,w:3},
+      {z:50,s:1,w:4},{z:50,s:2,w:3},{z:50,s:3,w:4},
+      {z:58,s:0,w:4},{z:58,s:1,w:4},{z:58,s:3,w:3},
+      {z:66,s:0,w:3},{z:66,s:2,w:4},{z:66,s:3,w:4},
+      {z:74,s:1,w:4},{z:74,s:2,w:3},{z:74,s:3,w:4},
+      {z:82,s:0,w:4},{z:82,s:1,w:3},{z:82,s:2,w:4},
+      {z:90,s:0,w:3},{z:90,s:2,w:4},{z:90,s:3,w:3},
+      {z:96,s:1,w:2}
+    ]),
+    obstacles:[
+      {type:'gravFlip',segmentZ:18,surface:0},{type:'gravFlip',segmentZ:38,surface:1},
+      {type:'gravFlip',segmentZ:58,surface:2},{type:'rotating',segmentZ:28,speed:1.5}
+    ]
+  },
+  // All triples, width 4-5, tighter spacing
+  { id:5,name:'Level 5',
+    colors:{primary:0xcc1111,secondary:0x880000,fogColor:0x0f0000},
+    segments:mkSegs(108,[
+      {z:4,s:0,w:4},{z:4,s:2,w:4},{z:4,s:3,w:3},
+      {z:11,s:0,w:4},{z:11,s:1,w:4},{z:11,s:3,w:4},
+      {z:19,s:1,w:4},{z:19,s:2,w:5},{z:19,s:3,w:4},
+      {z:27,s:0,w:5},{z:27,s:1,w:4},{z:27,s:2,w:5},
+      {z:35,s:0,w:4},{z:35,s:2,w:5},{z:35,s:3,w:4},
+      {z:43,s:1,w:5},{z:43,s:2,w:4},{z:43,s:3,w:5},
+      {z:51,s:0,w:4},{z:51,s:1,w:5},{z:51,s:3,w:4},
+      {z:59,s:0,w:5},{z:59,s:1,w:4},{z:59,s:2,w:5},
+      {z:67,s:0,w:4},{z:67,s:2,w:5},{z:67,s:3,w:4},
+      {z:75,s:1,w:5},{z:75,s:2,w:4},{z:75,s:3,w:5},
+      {z:83,s:0,w:4},{z:83,s:1,w:5},{z:83,s:3,w:4},
+      {z:91,s:0,w:5},{z:91,s:2,w:4},{z:91,s:3,w:5},
+      {z:100,s:1,w:4},{z:100,s:2,w:3}
+    ]),
+    obstacles:[
+      {type:'gravFlip',segmentZ:16,surface:0},{type:'gravFlip',segmentZ:38,surface:0},
+      {type:'rotating',segmentZ:28,speed:2},{type:'rotating',segmentZ:64,speed:2.2},
+      {type:'oscillating',segmentZ:52,amplitude:1.5,freq:.8}
+    ]
+  },
+  // All triples, width 5, 1-col breathers (spacing 7 = w5 + 1 + 1)
+  { id:6,name:'Level 6',
+    colors:{primary:0x0077bb,secondary:0x003388,fogColor:0x000510},
+    segments:mkSegs(118,[
+      {z:3,s:0,w:5},{z:3,s:1,w:4},{z:3,s:2,w:5},
+      {z:10,s:0,w:4},{z:10,s:2,w:5},{z:10,s:3,w:4},
+      {z:17,s:1,w:5},{z:17,s:2,w:4},{z:17,s:3,w:5},
+      {z:24,s:0,w:5},{z:24,s:1,w:5},{z:24,s:3,w:4},
+      {z:31,s:0,w:4},{z:31,s:1,w:5},{z:31,s:2,w:4},
+      {z:38,s:0,w:5},{z:38,s:2,w:5},{z:38,s:3,w:4},
+      {z:45,s:1,w:4},{z:45,s:2,w:5},{z:45,s:3,w:5},
+      {z:52,s:0,w:5},{z:52,s:1,w:4},{z:52,s:2,w:5},
+      {z:59,s:0,w:4},{z:59,s:2,w:5},{z:59,s:3,w:5},
+      {z:66,s:1,w:5},{z:66,s:2,w:4},{z:66,s:3,w:5},
+      {z:73,s:0,w:5},{z:73,s:1,w:5},{z:73,s:3,w:4},
+      {z:80,s:0,w:4},{z:80,s:1,w:5},{z:80,s:2,w:5},
+      {z:87,s:0,w:5},{z:87,s:2,w:4},{z:87,s:3,w:5},
+      {z:94,s:1,w:5},{z:94,s:2,w:5},{z:94,s:3,w:4},
+      {z:101,s:0,w:5},{z:101,s:1,w:4},{z:101,s:2,w:5},
+      {z:108,s:0,w:5},{z:108,s:2,w:5},{z:108,s:3,w:4},
+      {z:115,s:1,w:2}
+    ]),
+    obstacles:[
+      {type:'gravFlip',segmentZ:15,surface:0},{type:'gravFlip',segmentZ:27,surface:1},
+      {type:'gravFlip',segmentZ:44,surface:2},{type:'gravFlip',segmentZ:61,surface:3},
+      {type:'rotating',segmentZ:22,speed:2.5},{type:'oscillating',segmentZ:36,amplitude:1.8,freq:1},
+      {type:'oscillating',segmentZ:70,amplitude:2,freq:.9}
+    ]
+  },
+  // All triples, width 5-6, 1-col breathers (spacing 7)
+  { id:7,name:'Level 7',
+    colors:{primary:0x77cc00,secondary:0xaadd00,fogColor:0x040800},
+    segments:mkSegs(126,[
+      {z:3,s:0,w:5},{z:3,s:1,w:5},{z:3,s:2,w:4},
+      {z:9,s:0,w:4},{z:9,s:2,w:5},{z:9,s:3,w:5},
+      {z:15,s:1,w:5},{z:15,s:2,w:5},{z:15,s:3,w:4},
+      {z:21,s:0,w:5},{z:21,s:1,w:4},{z:21,s:3,w:5},
+      {z:27,s:0,w:4},{z:27,s:1,w:5},{z:27,s:2,w:5},
+      {z:33,s:0,w:5},{z:33,s:2,w:4},{z:33,s:3,w:5},
+      {z:39,s:1,w:5},{z:39,s:2,w:5},{z:39,s:3,w:4},
+      {z:45,s:0,w:5},{z:45,s:1,w:5},{z:45,s:3,w:4},
+      {z:51,s:0,w:4},{z:51,s:2,w:5},{z:51,s:3,w:5},
+      {z:57,s:1,w:5},{z:57,s:2,w:4},{z:57,s:3,w:5},
+      {z:63,s:0,w:5},{z:63,s:1,w:5},{z:63,s:2,w:4},
+      {z:69,s:0,w:4},{z:69,s:2,w:5},{z:69,s:3,w:5},
+      {z:75,s:1,w:5},{z:75,s:2,w:5},{z:75,s:3,w:4},
+      {z:81,s:0,w:5},{z:81,s:1,w:4},{z:81,s:3,w:5},
+      {z:87,s:0,w:4},{z:87,s:1,w:5},{z:87,s:2,w:5},
+      {z:93,s:0,w:5},{z:93,s:2,w:4},{z:93,s:3,w:5},
+      {z:99,s:1,w:5},{z:99,s:2,w:5},{z:99,s:3,w:4},
+      {z:105,s:0,w:5},{z:105,s:1,w:5},{z:105,s:3,w:4},
+      {z:111,s:0,w:4},{z:111,s:2,w:5},{z:111,s:3,w:5},
+      {z:118,s:1,w:5},{z:118,s:2,w:4},{z:118,s:3,w:5}
+    ]),
+    obstacles:[
+      {type:'gravFlip',segmentZ:8,surface:0},{type:'gravFlip',segmentZ:24,surface:1},
+      {type:'gravFlip',segmentZ:37,surface:2},{type:'gravFlip',segmentZ:49,surface:3},
+      {type:'rotating',segmentZ:16,speed:2.8},{type:'rotating',segmentZ:55,speed:3},
+      {type:'oscillating',segmentZ:41,amplitude:2,freq:1.1},{type:'oscillating',segmentZ:82,amplitude:2,freq:1.2}
+    ]
+  },
+  // Triple chains width 6, 1-col breathers (spacing 8 = w6 + 1 + 1)
+  { id:8,name:'Level 8',
+    colors:{primary:0x5500aa,secondary:0x330077,fogColor:0x050012},
+    segments:mkSegs(132,[
+      {z:3,s:0,w:6},{z:3,s:1,w:6},{z:3,s:2,w:5},
+      {z:11,s:0,w:5},{z:11,s:2,w:6},{z:11,s:3,w:5},
+      {z:18,s:1,w:6},{z:18,s:2,w:5},{z:18,s:3,w:6},
+      {z:26,s:0,w:6},{z:26,s:1,w:5},{z:26,s:3,w:6},
+      {z:33,s:0,w:5},{z:33,s:1,w:6},{z:33,s:2,w:6},
+      {z:41,s:0,w:6},{z:41,s:2,w:5},{z:41,s:3,w:6},
+      {z:48,s:1,w:6},{z:48,s:2,w:6},{z:48,s:3,w:5},
+      {z:56,s:0,w:5},{z:56,s:1,w:6},{z:56,s:3,w:6},
+      {z:63,s:0,w:6},{z:63,s:2,w:6},{z:63,s:3,w:5},
+      {z:71,s:1,w:6},{z:71,s:2,w:5},{z:71,s:3,w:6},
+      {z:78,s:0,w:6},{z:78,s:1,w:6},{z:78,s:2,w:5},
+      {z:86,s:0,w:5},{z:86,s:2,w:6},{z:86,s:3,w:6},
+      {z:93,s:1,w:6},{z:93,s:2,w:5},{z:93,s:3,w:6},
+      {z:101,s:0,w:6},{z:101,s:1,w:5},{z:101,s:3,w:6},
+      {z:108,s:0,w:5},{z:108,s:1,w:6},{z:108,s:2,w:6},
+      {z:116,s:0,w:6},{z:116,s:2,w:5},{z:116,s:3,w:6},
+      {z:123,s:1,w:5},{z:123,s:2,w:5}
+    ]),
+    obstacles:[
+      {type:'gravFlip',segmentZ:8,surface:0},{type:'gravFlip',segmentZ:20,surface:1},
+      {type:'gravFlip',segmentZ:32,surface:2},{type:'gravFlip',segmentZ:44,surface:3},
+      {type:'gravFlip',segmentZ:57,surface:0},{type:'gravFlip',segmentZ:68,surface:1},
+      {type:'rotating',segmentZ:14,speed:3},{type:'rotating',segmentZ:50,speed:3.5},
+      {type:'rotating',segmentZ:85,speed:3.2},
+      {type:'oscillating',segmentZ:28,amplitude:2.2,freq:1.2},{type:'oscillating',segmentZ:61,amplitude:2,freq:1.4},
+      {type:'oscillating',segmentZ:96,amplitude:2.5,freq:1.1}
+    ]
+  },
+  // Brutal — width 6, 1-col breathers throughout
+  { id:9,name:'Level 9',
+    colors:{primary:0xff2200,secondary:0xff6600,fogColor:0x0f0200},
+    segments:mkSegs(140,[
+      {z:3,s:0,w:6},{z:3,s:1,w:5},{z:3,s:2,w:6},
+      {z:10,s:0,w:6},{z:10,s:2,w:6},{z:10,s:3,w:5},
+      {z:17,s:1,w:6},{z:17,s:2,w:5},{z:17,s:3,w:6},
+      {z:24,s:0,w:6},{z:24,s:1,w:6},{z:24,s:3,w:5},
+      {z:31,s:0,w:5},{z:31,s:1,w:6},{z:31,s:2,w:6},
+      {z:38,s:0,w:6},{z:38,s:2,w:5},{z:38,s:3,w:6},
+      {z:45,s:1,w:6},{z:45,s:2,w:6},{z:45,s:3,w:5},
+      {z:52,s:0,w:6},{z:52,s:1,w:5},{z:52,s:3,w:6},
+      {z:59,s:0,w:5},{z:59,s:2,w:6},{z:59,s:3,w:6},
+      {z:66,s:1,w:6},{z:66,s:2,w:5},{z:66,s:3,w:6},
+      {z:73,s:0,w:6},{z:73,s:1,w:6},{z:73,s:2,w:5},
+      {z:80,s:0,w:5},{z:80,s:2,w:6},{z:80,s:3,w:6},
+      {z:87,s:1,w:6},{z:87,s:2,w:6},{z:87,s:3,w:5},
+      {z:94,s:0,w:6},{z:94,s:1,w:5},{z:94,s:3,w:6},
+      {z:101,s:0,w:5},{z:101,s:1,w:6},{z:101,s:2,w:6},
+      {z:108,s:0,w:6},{z:108,s:2,w:5},{z:108,s:3,w:6},
+      {z:115,s:1,w:6},{z:115,s:2,w:6},{z:115,s:3,w:5},
+      {z:122,s:0,w:6},{z:122,s:1,w:5},{z:122,s:2,w:6},
+      {z:130,s:0,w:5},{z:130,s:2,w:5},{z:130,s:3,w:4},
+      {z:136,s:1,w:3}
+    ]),
+    obstacles:[
+      {type:'gravFlip',segmentZ:8,surface:0},{type:'gravFlip',segmentZ:16,surface:1},
+      {type:'gravFlip',segmentZ:24,surface:2},{type:'gravFlip',segmentZ:32,surface:3},
+      {type:'gravFlip',segmentZ:40,surface:0},{type:'gravFlip',segmentZ:48,surface:1},
+      {type:'gravFlip',segmentZ:56,surface:2},{type:'gravFlip',segmentZ:64,surface:3},
+      {type:'rotating',segmentZ:12,speed:3.5},{type:'rotating',segmentZ:44,speed:4},
+      {type:'rotating',segmentZ:74,speed:4},{type:'rotating',segmentZ:104,speed:3.8},
+      {type:'oscillating',segmentZ:22,amplitude:2.5,freq:1.3},{type:'oscillating',segmentZ:54,amplitude:2.5,freq:1.5},
+      {type:'oscillating',segmentZ:86,amplitude:3,freq:1.4},{type:'oscillating',segmentZ:116,amplitude:2.5,freq:1.6}
+    ]
+  },
+  // Gauntlet — width 6, 1-col breathers, near-continuous for entire level
+  { id:10,name:'Level 10',
+    colors:{primary:0xffffff,secondary:0xff0000,fogColor:0x050505},
+    segments:mkSegs(152,[
+      {z:3,s:0,w:6},{z:3,s:1,w:6},{z:3,s:2,w:5},
+      {z:10,s:0,w:5},{z:10,s:2,w:6},{z:10,s:3,w:6},
+      {z:17,s:1,w:6},{z:17,s:2,w:5},{z:17,s:3,w:6},
+      {z:24,s:0,w:6},{z:24,s:1,w:6},{z:24,s:3,w:5},
+      {z:31,s:0,w:5},{z:31,s:1,w:6},{z:31,s:2,w:6},
+      {z:38,s:0,w:6},{z:38,s:2,w:5},{z:38,s:3,w:6},
+      {z:45,s:1,w:6},{z:45,s:2,w:6},{z:45,s:3,w:5},
+      {z:52,s:0,w:6},{z:52,s:1,w:5},{z:52,s:3,w:6},
+      {z:59,s:0,w:5},{z:59,s:2,w:6},{z:59,s:3,w:6},
+      {z:66,s:1,w:6},{z:66,s:2,w:5},{z:66,s:3,w:6},
+      {z:73,s:0,w:6},{z:73,s:1,w:6},{z:73,s:2,w:5},
+      {z:80,s:0,w:5},{z:80,s:2,w:6},{z:80,s:3,w:6},
+      {z:87,s:1,w:6},{z:87,s:2,w:5},{z:87,s:3,w:6},
+      {z:94,s:0,w:6},{z:94,s:1,w:6},{z:94,s:3,w:5},
+      {z:101,s:0,w:5},{z:101,s:1,w:6},{z:101,s:2,w:6},
+      {z:108,s:0,w:6},{z:108,s:2,w:5},{z:108,s:3,w:6},
+      {z:115,s:1,w:6},{z:115,s:2,w:6},{z:115,s:3,w:5},
+      {z:122,s:0,w:6},{z:122,s:1,w:5},{z:122,s:3,w:6},
+      {z:129,s:0,w:5},{z:129,s:2,w:6},{z:129,s:3,w:6},
+      {z:136,s:1,w:6},{z:136,s:2,w:5},{z:136,s:3,w:6},
+      {z:143,s:0,w:6},{z:143,s:1,w:6},{z:143,s:2,w:5},
+      {z:148,s:2,w:2}
+    ]),
+    obstacles:[
+      {type:'gravFlip',segmentZ:5,surface:0},{type:'gravFlip',segmentZ:9,surface:1},
+      {type:'gravFlip',segmentZ:13,surface:2},{type:'gravFlip',segmentZ:17,surface:3},
+      {type:'gravFlip',segmentZ:21,surface:0},{type:'gravFlip',segmentZ:25,surface:1},
+      {type:'gravFlip',segmentZ:29,surface:2},{type:'gravFlip',segmentZ:33,surface:3},
+      {type:'gravFlip',segmentZ:37,surface:0},{type:'gravFlip',segmentZ:41,surface:1},
+      {type:'gravFlip',segmentZ:45,surface:2},{type:'gravFlip',segmentZ:49,surface:3},
+      {type:'rotating',segmentZ:16,speed:4},{type:'rotating',segmentZ:32,speed:4.5},
+      {type:'rotating',segmentZ:58,speed:5},{type:'rotating',segmentZ:76,speed:4.5},
+      {type:'rotating',segmentZ:92,speed:5},{type:'rotating',segmentZ:110,speed:5},
+      {type:'oscillating',segmentZ:22,amplitude:3,freq:1.6},{type:'oscillating',segmentZ:42,amplitude:3,freq:1.8},
+      {type:'oscillating',segmentZ:64,amplitude:3,freq:2},{type:'oscillating',segmentZ:82,amplitude:3,freq:1.8},
+      {type:'oscillating',segmentZ:98,amplitude:3,freq:2},{type:'oscillating',segmentZ:116,amplitude:3,freq:2.2}
+    ]
+  }
+];
+
+let deathGuard=false, distTimer=0;
+let infSegs=[], infCol=0, infDist=0;
+
+function densityFor(m){ return m<500?.50:m<1000?.70:m<2000?.85:.95; }
+function maxGapFor(m){ return m<500?4:m<1000?5:m<2000?6:7; }
+
+function genInfiniteChunk(){
+  const dist=GameState.stats.distance;
+  const density=densityFor(dist);
+  const maxW=maxGapFor(dist);
+  // probability of using 2 or 3 simultaneous surface gaps
+  const multiProb=dist<500?.25:dist<1000?.60:dist<2000?.80:.95;
+  const chunk=[];
+  for(let i=0;i<25;i++) chunk.push([1,1,1,1]);
+  let i=3;
+  while(i<22){
+    if(Math.random()<density){
+      const w=2+Math.floor(Math.random()*maxW); // min width 2
+      const r=Math.random();
+      // choose 1, 2, or 3 surfaces to gap (never all 4)
+      const numSurfs=r<multiProb*0.35?3:r<multiProb?2:1;
+      const surfs=[0,1,2,3];
+      for(let k=3;k>0;k--){
+        const j=Math.floor(Math.random()*(k+1));
+        [surfs[k],surfs[j]]=[surfs[j],surfs[k]];
+      }
+      for(let s=0;s<numSurfs;s++){
+        for(let j=i;j<Math.min(i+w,22);j++) chunk[j][surfs[s]]=0;
+      }
+      i+=w+1; // tighter packing: 1-col min spacing
+    } else { i++; }
+  }
+  return chunk;
+}
+
+function startLevel(n){
+  const ld=LEVELS[n]; if(!ld) return;
+  GameState.gameplay.mode='level';
+  GameState.gameplay.currentLevel=n;
+  GameState.gameplay.isPaused=false;
+  GameState.gameplay.isGameOver=false;
+  GameState.gameplay.playerAlive=true;
+  deathGuard=false;
+  window.dispatchEvent(new CustomEvent('game:start',{detail:{levelData:ld}}));
+}
+
+function startInfiniteMode(){
+  GameState.gameplay.mode='infinite';
+  GameState.gameplay.isPaused=false;
+  GameState.gameplay.isGameOver=false;
+  GameState.gameplay.playerAlive=true;
+  GameState.stats.distance=0;
+  infSegs=[]; infCol=0; infDist=0; deathGuard=false;
+  // Pre-generate 4 chunks
+  const initialSegs=[];
+  // First 5 columns always solid
+  for(let i=0;i<5;i++) initialSegs.push([1,1,1,1]);
+  for(let c=0;c<3;c++){
+    const ch=genInfiniteChunk();
+    initialSegs.push(...ch);
+  }
+  infSegs=initialSegs;
+  const infiniteLevelData={
+    id:'infinite', name:'Infinite Mode',
+    colors:{primary:0x224488,secondary:0x442288,fogColor:0x000011},
+    segments:null, obstacles:[]
+  };
+  window.dispatchEvent(new CustomEvent('game:start',{detail:{levelData:infiniteLevelData}}));
+  window.dispatchEvent(new CustomEvent('engine:infiniteSegments',{detail:{segs:infSegs}}));
+}
+
+function handlePlayerDeath(){
+  if(deathGuard) return;
+  deathGuard=true;
+  GameState.gameplay.playerAlive=false;
+  const lv=GameState.gameplay.currentLevel;
+  if(!GameState.stats.levelDeaths[lv]) GameState.stats.levelDeaths[lv]=0;
+  GameState.stats.levelDeaths[lv]++;
+  GameState.stats.deaths++;
+  window.dispatchEvent(new CustomEvent('stats:update',{detail:{
+    deaths:GameState.stats.deaths,
+    levelDeaths:GameState.stats.levelDeaths
+  }}));
+  if(GameState.gameplay.mode==='level'){
+    setTimeout(()=>{
+      window.dispatchEvent(new CustomEvent('game:reset'));
+      deathGuard=false;
+      GameState.gameplay.playerAlive=true;
+    },1500);
+  } else if(GameState.gameplay.mode==='infinite'){
+    const dist=Math.floor(GameState.stats.distance);
+    if(dist>GameState.progression.infiniteHighScore){
+      GameState.progression.infiniteHighScore=dist;
+    }
+    setTimeout(()=>{
+      window.dispatchEvent(new CustomEvent('infinite:gameover',{detail:{distance:dist,best:GameState.progression.infiniteHighScore}}));
+    },1200);
+  }
+}
+
+function updateGameState(dt){
+  if(GameState.gameplay.isPaused||GameState.gameplay.mode==='menu') return;
+  if(GameState.gameplay.mode==='infinite'&&GameState.gameplay.playerAlive){
+    infDist+=PSPD*dt; // PSPD=12.48 units/s, ~1m per 2 units
+    GameState.stats.distance=infDist/2;
+    distTimer+=dt;
+    if(distTimer>=0.5){
+      distTimer=0;
+      window.dispatchEvent(new CustomEvent('distance:update',{detail:{meters:Math.floor(GameState.stats.distance)}}));
+      // Generate more chunks if needed
+      const playerCol=Math.floor(infDist/TD);
+      if(playerCol+40>infSegs.length){
+        const newChunk=genInfiniteChunk();
+        infSegs.push(...newChunk);
+        window.dispatchEvent(new CustomEvent('engine:infiniteSegments',{detail:{segs:newChunk}}));
+      }
+    }
+  }
+}
+
+window.addEventListener('player:death',handlePlayerDeath);
+window.addEventListener('level:complete',()=>{
+  const n=GameState.gameplay.currentLevel;
+  if(n>=GameState.progression.highestUnlocked&&n<10){
+    GameState.progression.highestUnlocked=n+1;
+  }
+  GameState.gameplay.mode='menu';
+  setTimeout(()=>window.dispatchEvent(new CustomEvent('levelmode:complete',{detail:{level:n}})),300);
+});
+window.addEventListener('menu:playLevel',(e)=>startLevel(e.detail?.level||1));
+window.addEventListener('menu:infiniteMode',startInfiniteMode);
+window.addEventListener('game:pause',()=>{ GameState.gameplay.isPaused=true; });
+window.addEventListener('game:resume',()=>{ GameState.gameplay.isPaused=false; });
+
+
+window.GameLogic={
+  init(){ /* levels pre-built */ },
+  startLevel,
+  startInfiniteMode,
+  handlePlayerDeath,
+  updateGameState,
+  getLevelData(n){ return LEVELS[n]||null; },
+  generateInfiniteSegment(){ return genInfiniteChunk(); }
+};
+})(); // end Logic
+
+
+// ═══════════════════════════════════════════
+// GAME UI – Menus, HUD, Audio, Storage
+// ═══════════════════════════════════════════
+(function(){
+'use strict';
+let audioCtx=null, musicGain=null, sfxGain=null;
+let musicPlaying=false;
+const root=document.getElementById('ui-root');
+
+function initAudio(){
+  try{
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    sfxGain=audioCtx.createGain(); sfxGain.gain.value=GameState.settings.sfxVolume/100;
+    sfxGain.connect(audioCtx.destination);
+    musicGain=audioCtx.createGain(); musicGain.gain.value=GameState.settings.musicVolume/100*.4;
+    musicGain.connect(audioCtx.destination);
+  }catch(e){ console.warn('Audio not available'); }
+}
+
+function resumeAudio(){
+  if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
+}
+
+function playSound(name){
+  if(!audioCtx) return;
+  resumeAudio();
+  const vol=(GameState.settings.sfxVolume/100);
+  if(vol<=0) return;
+  const t=audioCtx.currentTime;
+  try{
+    if(name==='jump'){
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(300,t); o.frequency.linearRampToValueAtTime(600,t+.12);
+      g.gain.setValueAtTime(.3*vol,t); g.gain.linearRampToValueAtTime(0,t+.15);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t+.15);
+    } else if(name==='land'){
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type='triangle'; o.frequency.setValueAtTime(120,t); o.frequency.linearRampToValueAtTime(60,t+.1);
+      g.gain.setValueAtTime(.4*vol,t); g.gain.linearRampToValueAtTime(0,t+.12);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t+.12);
+    } else if(name==='death'){
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type='sawtooth'; o.frequency.setValueAtTime(400,t); o.frequency.exponentialRampToValueAtTime(60,t+.8);
+      g.gain.setValueAtTime(.4*vol,t); g.gain.linearRampToValueAtTime(0,t+.8);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t+.8);
+    } else if(name==='surface'){
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type='square'; o.frequency.value=440;
+      g.gain.setValueAtTime(.15*vol,t); g.gain.linearRampToValueAtTime(0,t+.06);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t+.06);
+    } else if(name==='click'){
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type='sine'; o.frequency.value=520;
+      g.gain.setValueAtTime(.12*vol,t); g.gain.linearRampToValueAtTime(0,t+.08);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t+.08);
+    } else if(name==='complete'){
+      [523,659,784].forEach((f,i)=>{
+        const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+        o.type='sine'; o.frequency.value=f;
+        g.gain.setValueAtTime(.3*vol,t+i*.12); g.gain.linearRampToValueAtTime(0,t+i*.12+.18);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t+i*.12); o.stop(t+i*.12+.2);
+      });
+    }
+  }catch(e){}
+}
+
+function startMusic(){
+  if(!audioCtx||musicPlaying) return;
+  musicPlaying=true;
+  const notes=[110,138,165,220,138,165];
+  let beat=0;
+  const bpm=130, beatDur=60/bpm;
+  function scheduleBeat(){
+    const t=audioCtx.currentTime;
+    const f=notes[beat%notes.length];
+    const o=audioCtx.createOscillator();
+    const g=audioCtx.createGain();
+    o.type='sawtooth'; o.frequency.value=f;
+    const filt=audioCtx.createBiquadFilter();
+    filt.type='lowpass'; filt.frequency.value=800+Math.sin(beat*.3)*400;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.7,t+.02);
+    g.gain.setValueAtTime(.7,t+beatDur*.6); g.gain.linearRampToValueAtTime(0,t+beatDur*.9);
+    o.connect(filt); filt.connect(g); g.connect(musicGain);
+    o.start(t); o.stop(t+beatDur);
+    beat++;
+    if(musicPlaying) setTimeout(scheduleBeat,(beatDur*.9)*1000);
+  }
+  scheduleBeat();
+}
+
+function stopMusic(){ musicPlaying=false; }
+
+function mk(tag,props={},text=''){
+  const el=document.createElement(tag);
+  Object.assign(el,props);
+  if(props.style) Object.assign(el.style,props.style);
+  if(text) el.textContent=text;
+  return el;
+}
+function btn(label,cls,cb){
+  const b=mk('button',{className:'btn '+(cls||''),onclick:()=>{playSound('click');cb&&cb();}},label);
+  return b;
+}
+function showScreen(id){
+  root.querySelectorAll('.game-screen').forEach(s=>s.classList.remove('screen-active'));
+  if(id){ const s=document.getElementById(id); if(s) s.classList.add('screen-active'); }
+}
+
+// ── Main Menu
+function buildMainMenu(){
+  const sc=mk('div',{id:'screen-main',className:'game-screen menu-bg'});
+  // CSS starfield
+  const stars=mk('div',{id:'screen-stars'});
+  for(let i=0;i<80;i++){
+    const s=mk('div');
+    s.style.cssText=`position:absolute;border-radius:50%;background:#fff;
+      width:${Math.random()*3+1}px;height:${Math.random()*3+1}px;
+      top:${Math.random()*100}%;left:${Math.random()*100}%;
+      opacity:${Math.random()*.8+.2};
+      animation:float ${2+Math.random()*4}s ease-in-out infinite;
+      animation-delay:${Math.random()*4}s;`;
+    stars.appendChild(s);
+  }
+  sc.appendChild(stars);
+  sc.appendChild(mk('div',{className:'title'},'RUN 2'));
+  sc.appendChild(mk('div',{className:'subtitle'},'A SPACE PLATFORMER'));
+  sc.appendChild(btn('▶  PLAY LEVELS','',()=>{ showScreen('screen-levelselect'); refreshLevelSelect(); }));
+  sc.appendChild(btn('∞  INFINITE MODE','',()=>{ window.dispatchEvent(new CustomEvent('menu:infiniteMode')); showHUD('infinite'); showScreen(null); }));
+  sc.appendChild(btn('?  HOW TO PLAY','btn-secondary',()=>showScreen('screen-tutorial')));
+  sc.appendChild(btn('⚙  SETTINGS','btn-secondary',()=>showScreen('screen-settings')));
+  const stat=mk('div',{className:'stat-line',id:'mm-deaths'},'');
+  sc.appendChild(stat);
+  root.appendChild(sc);
+}
+
+// ── Level Select
+function buildLevelSelect(){
+  const sc=mk('div',{id:'screen-levelselect',className:'game-screen overlay-bg'});
+  sc.appendChild(mk('div',{className:'screen-title'},'SELECT LEVEL'));
+  const grid=mk('div',{className:'level-grid',id:'level-grid'});
+  sc.appendChild(grid);
+  sc.appendChild(btn('← BACK','btn-sm btn-secondary',()=>showScreen('screen-main')));
+  root.appendChild(sc);
+}
+
+const LEVEL_COLORS=[
+  '#4466dd','#22aa66','#cc6600','#cc2277','#cc1111',
+  '#0088cc','#88cc00','#5500aa','#ff3300','#888888'
+];
+
+function refreshLevelSelect(){
+  const grid=document.getElementById('level-grid'); if(!grid) return;
+  grid.innerHTML='';
+  const hs=GameState.progression.highestUnlocked;
+  for(let n=1;n<=10;n++){
+    const unlocked=n<=hs;
+    const d=GameState.stats.levelDeaths[n]||0;
+    const b=mk('div',{className:'lvl-btn'+(unlocked?'':' locked')});
+    b.style.borderColor=unlocked?LEVEL_COLORS[n-1]:'#444';
+    const numEl=mk('div',{className:'lnum'},String(n));
+    b.appendChild(numEl);
+    if(unlocked&&d>0) b.appendChild(mk('div',{className:'lvl-deaths'},`${d} deaths`));
+    if(!unlocked) b.appendChild(mk('div',{},'🔒'));
+    if(unlocked) b.onclick=()=>{ playSound('click'); window.dispatchEvent(new CustomEvent('menu:playLevel',{detail:{level:n}})); showHUD('level'); showScreen(null); };
+    grid.appendChild(b);
+  }
+}
+
+// ── Pause Menu
+function buildPauseMenu(){
+  const sc=mk('div',{id:'screen-pause',className:'game-screen overlay-bg'});
+  sc.appendChild(mk('div',{className:'screen-title'},'PAUSED'));
+  sc.appendChild(btn('▶  RESUME','',()=>{ window.dispatchEvent(new CustomEvent('game:resume')); showScreen(null); }));
+  sc.appendChild(btn('↺  RESTART','',()=>{
+    const m=GameState.gameplay.mode;
+    window.dispatchEvent(new CustomEvent('game:resume'));
+    if(m==='level') window.dispatchEvent(new CustomEvent('menu:playLevel',{detail:{level:GameState.gameplay.currentLevel}}));
+    else window.dispatchEvent(new CustomEvent('menu:infiniteMode'));
+    showHUD(m); showScreen(null);
+  }));
+  sc.appendChild(btn('⌂  QUIT TO MENU','btn-danger',()=>{ window.dispatchEvent(new CustomEvent('game:resume')); stopMusic(); GameState.gameplay.mode='menu'; showScreen('screen-main'); setHUDVisible(false); }));
+  root.appendChild(sc);
+}
+
+// ── Settings
+function buildSettings(){
+  const sc=mk('div',{id:'screen-settings',className:'game-screen overlay-bg'});
+  sc.appendChild(mk('div',{className:'screen-title'},'SETTINGS'));
+  function sliderRow(label,key,min,max){
+    const row=mk('div',{className:'slider-row'});
+    row.appendChild(mk('label',{},label));
+    const sl=mk('input',{type:'range',min,max,value:GameState.settings[key]});
+    const val=mk('div',{className:'slider-val'},GameState.settings[key]+'%');
+    sl.oninput=()=>{
+      GameState.settings[key]=+sl.value; val.textContent=sl.value+'%';
+      if(sfxGain&&key==='sfxVolume') sfxGain.gain.value=sl.value/100;
+      if(musicGain&&key==='musicVolume') musicGain.gain.value=sl.value/100*.4;
+      saveProgress();
+    };
+    row.appendChild(sl); row.appendChild(val);
+    return row;
+  }
+  sc.appendChild(sliderRow('SFX Volume','sfxVolume',0,100));
+  sc.appendChild(sliderRow('Music Volume','musicVolume',0,100));
+  const tr=mk('div',{className:'toggle-row'});
+  tr.appendChild(mk('label',{},'Show Controls'));
+  const cb=mk('input',{type:'checkbox',checked:GameState.settings.showControls});
+  cb.onchange=()=>{ GameState.settings.showControls=cb.checked; saveProgress(); };
+  tr.appendChild(cb);
+  sc.appendChild(tr);
+  sc.appendChild(btn('← BACK','btn-sm btn-secondary',()=>showScreen('screen-main')));
+  root.appendChild(sc);
+}
+
+// ── Tutorial
+function buildTutorial(){
+  const sc=mk('div',{id:'screen-tutorial',className:'game-screen overlay-bg'});
+  sc.appendChild(mk('div',{className:'screen-title'},'HOW TO PLAY'));
+  const hints=[
+    ['← →  Arrow Keys','Move left/right along the tunnel surface'],
+    ['SPACEBAR','Jump over gaps'],
+    ['ESC','Pause / Unpause'],
+  ];
+  for(const [k,v] of hints){
+    const b=mk('div',{className:'hint-box'});
+    b.innerHTML=`<span class="key-badge">${k}</span><br><span style="font-size:13px;color:#aaa">${v}</span>`;
+    sc.appendChild(b);
+  }
+  const tips=[
+    'Run on any surface — floor, walls, or ceiling',
+    'Reach an edge to rotate gravity to that wall',
+    'Green tiles flip your gravity 180°',
+    'Falling off any surface = death'
+  ];
+  for(const t of tips) sc.appendChild(mk('div',{className:'hint-box',style:{fontSize:'14px',padding:'10px 20px',maxWidth:'380px'}},t));
+  sc.appendChild(btn('GOT IT!','',()=>{ saveProgress(); showScreen('screen-main'); }));
+  root.appendChild(sc);
+}
+
+// ── HUD
+let hudVisible=false;
+function buildHUD(){
+  const hud=mk('div',{id:'hud',style:{display:'none',position:'absolute',top:0,left:0,width:'100%',height:'100%',pointerEvents:'none'}});
+  const lvlEl=mk('div',{className:'hud-el',id:'hud-level',style:{top:'16px',left:'16px',fontSize:'18px'}});
+  const deathEl=mk('div',{className:'hud-el',id:'hud-deaths',style:{top:'42px',left:'16px',fontSize:'16px',color:'#ffaa88'}});
+  const distEl=mk('div',{className:'hud-el',id:'hud-dist',style:{top:'14px',left:'50%',transform:'translateX(-50%)',fontSize:'26px',display:'none'}});
+  const bestEl=mk('div',{className:'hud-el',id:'hud-best',style:{top:'48px',left:'50%',transform:'translateX(-50%)',fontSize:'14px',color:'#aaa',display:'none'}});
+  const pauseHint=mk('div',{className:'hud-el',id:'hud-pausehint',style:{top:'16px',right:'16px',fontSize:'13px',color:'rgba(255,255,255,0.5)'}},`ESC to pause`);
+  const ctrlHint=mk('div',{className:'hud-el',id:'hud-ctrl',style:{bottom:'20px',left:'50%',transform:'translateX(-50%)',fontSize:'13px',color:'rgba(255,255,255,0.6)',textAlign:'center'}},`← → Move  |  SPACE Jump`);
+  hud.appendChild(lvlEl); hud.appendChild(deathEl); hud.appendChild(distEl); hud.appendChild(bestEl); hud.appendChild(pauseHint); hud.appendChild(ctrlHint);
+  root.appendChild(hud);
+}
+
+function showHUD(mode){
+  const hud=document.getElementById('hud'); if(!hud) return;
+  hud.style.display='block'; hudVisible=true;
+  const lvlEl=document.getElementById('hud-level');
+  const deathEl=document.getElementById('hud-deaths');
+  const distEl=document.getElementById('hud-dist');
+  const bestEl=document.getElementById('hud-best');
+  const ctrl=document.getElementById('hud-ctrl');
+  if(mode==='level'){
+    lvlEl.textContent='LEVEL '+GameState.gameplay.currentLevel;
+    deathEl.textContent='Deaths: '+((GameState.stats.levelDeaths[GameState.gameplay.currentLevel])||0);
+    lvlEl.style.display=''; deathEl.style.display='';
+    distEl.style.display='none'; bestEl.style.display='none';
+    if(ctrl&&GameState.settings.showControls){ ctrl.style.display=''; ctrl.style.opacity='1'; setTimeout(()=>{ if(ctrl) ctrl.style.transition='opacity 2s'; ctrl.style.opacity='0'; },8000); }
+    else if(ctrl) ctrl.style.display='none';
+  } else {
+    lvlEl.style.display='none'; deathEl.style.display='none';
+    distEl.style.display=''; bestEl.style.display='';
+    distEl.textContent='0 m';
+    bestEl.textContent='Best: '+GameState.progression.infiniteHighScore+'m';
+    if(ctrl) ctrl.style.display='none';
+  }
+}
+
+function setHUDVisible(v){
+  const hud=document.getElementById('hud'); if(!hud) return;
+  hud.style.display=v?'block':'none'; hudVisible=v;
+}
+
+function updateHUD(data){
+  if(data.level!==undefined){
+    const el=document.getElementById('hud-level'); if(el) el.textContent='LEVEL '+data.level;
+  }
+  if(data.deaths!==undefined){
+    const el=document.getElementById('hud-deaths'); if(el) el.textContent='Deaths: '+data.deaths;
+  }
+  if(data.distance!==undefined){
+    const el=document.getElementById('hud-dist'); if(el) el.textContent=data.distance+' m';
+    const be=document.getElementById('hud-best'); if(be) be.textContent='Best: '+GameState.progression.infiniteHighScore+'m';
+  }
+}
+
+// ── Death Flash
+let flashTimeout;
+function buildDeathFlash(){
+  const fl=mk('div',{id:'death-flash'});
+  const pp=mk('div',{id:'death-popup'});
+  root.appendChild(fl); root.appendChild(pp);
+}
+function triggerDeathFlash(msg){
+  const fl=document.getElementById('death-flash');
+  const pp=document.getElementById('death-popup');
+  if(fl){ fl.style.opacity='1'; clearTimeout(flashTimeout); flashTimeout=setTimeout(()=>fl.style.opacity='0',600); }
+  if(pp&&msg){
+    // 0.5s delay before popup appears so the death landing has room to breathe
+    setTimeout(()=>{
+      pp.textContent=msg; pp.style.display='block';
+      setTimeout(()=>pp.style.display='none',900);
+    },500);
+  }
+}
+
+// ── Level Complete Screen
+function buildLevelComplete(){
+  const sc=mk('div',{id:'screen-levelcomplete',className:'game-screen overlay-bg'});
+  sc.appendChild(mk('div',{className:'screen-title',style:{color:'#88ffaa'}},'LEVEL COMPLETE!'));
+  sc.appendChild(mk('div',{id:'lc-stats',className:'stat-line',style:{fontSize:'16px',marginBottom:'10px'}},''));
+  const nextBtn=btn('NEXT LEVEL ▶','',()=>{
+    const n=GameState.gameplay.currentLevel+1;
+    if(n<=10&&n<=GameState.progression.highestUnlocked){
+      window.dispatchEvent(new CustomEvent('menu:playLevel',{detail:{level:n}}));
+      showHUD('level'); showScreen(null);
+    } else { showScreen('screen-main'); setHUDVisible(false); }
+  });
+  nextBtn.id='lc-next';
+  sc.appendChild(nextBtn);
+  sc.appendChild(btn('⌂ MENU','btn-secondary',()=>{ showScreen('screen-main'); setHUDVisible(false); GameState.gameplay.mode='menu'; }));
+  root.appendChild(sc);
+}
+
+// ── Infinite Game Over
+function buildInfiniteGameOver(){
+  const sc=mk('div',{id:'screen-igo',className:'game-screen overlay-bg'});
+  sc.appendChild(mk('div',{className:'screen-title',style:{color:'#ff6644'}},'GAME OVER'));
+  sc.appendChild(mk('div',{id:'igo-dist',style:{fontSize:'32px',fontWeight:'700',color:'#fff',margin:'10px 0'}},'0 m'));
+  sc.appendChild(mk('div',{id:'igo-best',style:{fontSize:'16px',color:'#aaa',marginBottom:'10px'}},''));
+  sc.appendChild(mk('div',{id:'igo-record',style:{fontSize:'20px',color:'#ffdd44',fontWeight:'700',marginBottom:'14px',display:'none'}},'🏆 NEW RECORD!'));
+  sc.appendChild(btn('↺ TRY AGAIN','',()=>{ window.dispatchEvent(new CustomEvent('menu:infiniteMode')); showHUD('infinite'); showScreen(null); }));
+  sc.appendChild(btn('⌂ MENU','btn-secondary',()=>{ showScreen('screen-main'); setHUDVisible(false); GameState.gameplay.mode='menu'; }));
+  root.appendChild(sc);
+}
+
+// ── Storage
+const SAVE_KEY='run2clone_save';
+function saveProgress(){
+  try{
+    const data={
+      settings:GameState.settings,
+      levelProgress:{ highestUnlocked:GameState.progression.highestUnlocked, levelDeaths:GameState.stats.levelDeaths },
+      infiniteMode:{ highScore:GameState.progression.infiniteHighScore },
+      tutorialSeen:true
+    };
+    localStorage.setItem(SAVE_KEY,JSON.stringify(data));
+  }catch(e){}
+}
+function loadProgress(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY); if(!raw) return null;
+    const d=JSON.parse(raw);
+    if(d.settings){ Object.assign(GameState.settings,d.settings); }
+    if(d.levelProgress){
+      GameState.progression.highestUnlocked=d.levelProgress.highestUnlocked||1;
+      GameState.stats.levelDeaths=d.levelProgress.levelDeaths||{};
+    }
+    if(d.infiniteMode) GameState.progression.infiniteHighScore=d.infiniteMode.highScore||0;
+    return d;
+  }catch(e){ return null; }
+}
+
+// ── Event Listeners
+window.addEventListener('sound:jump',()=>playSound('jump'));
+window.addEventListener('sound:land',()=>playSound('land'));
+window.addEventListener('sound:death',()=>playSound('death'));
+window.addEventListener('sound:surface',()=>playSound('surface'));
+
+window.addEventListener('player:death',()=>{
+  const lv=GameState.gameplay.currentLevel;
+  const d=(GameState.stats.levelDeaths[lv]||0);
+  if(GameState.gameplay.mode==='level') triggerDeathFlash(`Death #${d}`);
+  else triggerDeathFlash(null);
+});
+
+window.addEventListener('stats:update',(e)=>{
+  const d=e.detail;
+  if(GameState.gameplay.mode==='level'){
+    const lv=GameState.gameplay.currentLevel;
+    updateHUD({deaths:(d.levelDeaths||{})[lv]||0});
+  }
+  // Update main menu stat
+  const mmD=document.getElementById('mm-deaths');
+  if(mmD&&GameState.stats.deaths>0) mmD.textContent='Total Deaths: '+GameState.stats.deaths;
+  saveProgress();
+});
+
+window.addEventListener('distance:update',(e)=>{
+  updateHUD({distance:e.detail?.meters||0});
+});
+
+window.addEventListener('game:start',()=>{
+  setHUDVisible(true);
+});
+
+window.addEventListener('game:pause',()=>{
+  GameState.gameplay.isPaused=true;
+  showScreen('screen-pause');
+});
+
+window.addEventListener('game:resume',()=>{
+  GameState.gameplay.isPaused=false;
+  showScreen(null);
+});
+
+window.addEventListener('game:reset',()=>{
+  // Refresh HUD deaths after respawn
+  if(GameState.gameplay.mode==='level'){
+    const lv=GameState.gameplay.currentLevel;
+    updateHUD({level:lv,deaths:(GameState.stats.levelDeaths[lv])||0});
+  }
+});
+
+window.addEventListener('levelmode:complete',(e)=>{
+  const lv=e.detail?.level||GameState.gameplay.currentLevel;
+  playSound('complete');
+  const lcs=document.getElementById('lc-stats');
+  if(lcs) lcs.textContent=`Level ${lv} complete! Deaths: ${GameState.stats.levelDeaths[lv]||0}`;
+  const nb=document.getElementById('lc-next');
+  if(nb) nb.textContent = lv<10 ? 'NEXT LEVEL ▶' : 'COMPLETE! ▶';
+  setHUDVisible(false);
+  saveProgress();
+  showScreen('screen-levelcomplete');
+});
+
+window.addEventListener('infinite:gameover',(e)=>{
+  const dist=e.detail?.distance||0, best=e.detail?.best||0;
+  const de=document.getElementById('igo-dist'); if(de) de.textContent=dist+' m';
+  const be=document.getElementById('igo-best'); if(be) be.textContent='Best: '+best+'m';
+  const re=document.getElementById('igo-record');
+  if(re) re.style.display=(dist>=best&&dist>0)?'':'none';
+  setHUDVisible(false); saveProgress();
+  showScreen('screen-igo');
+});
+
+// Resume audio on first user interaction
+document.addEventListener('click',resumeAudio,{once:true});
+document.addEventListener('keydown',resumeAudio,{once:true});
+
+window.GameUI={
+  init(){
+    initAudio();
+    buildMainMenu(); buildLevelSelect(); buildPauseMenu();
+    buildSettings(); buildTutorial(); buildHUD();
+    buildDeathFlash(); buildLevelComplete(); buildInfiniteGameOver();
+    const save=loadProgress();
+    showScreen('screen-main');
+    const mmD=document.getElementById('mm-deaths');
+    if(mmD&&GameState.stats.deaths>0) mmD.textContent='Total Deaths: '+GameState.stats.deaths;
+    if(!save){
+      // First launch: overlay the tutorial immediately (no delay)
+      showScreen('screen-tutorial');
+    }
+  },
+  showMainMenu(){ showScreen('screen-main'); },
+  showLevelSelect(){ showScreen('screen-levelselect'); refreshLevelSelect(); },
+  showPauseMenu(){ showScreen('screen-pause'); },
+  updateHUD,
+  playSound,
+  saveProgress,
+  loadProgress
+};
+})(); // end UI
+
+
+// ═══════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════
+window.addEventListener('DOMContentLoaded',()=>{
+  window.GameEngine.init();
+  window.GameLogic.init();
+  window.GameUI.init();
+});
+</script>
+</body>
+</html>
