@@ -916,6 +916,7 @@ const LEVELS=[null, // index 0 unused
 
 let deathGuard=false, distTimer=0;
 let infSegs=[], infCol=0, infDist=0;
+let infSolidSince=[0,0,0,0]; // tiles since last gap per surface, cross-chunk
 
 function densityFor(m){ return m<500?.75:m<1000?.88:m<2000?.96:1; }
 function maxGapFor(m){ return m<500?4:m<1000?5:m<2000?6:7; }
@@ -946,6 +947,23 @@ function genInfiniteChunk(){
       i+=w+1; // tighter packing: 1-col min spacing
     } else { i++; }
   }
+  // Enforce max ~3s (~18 tiles) solid per surface, tracking across chunk boundaries
+  const MAX_SOLID=18;
+  for(let surf=0;surf<4;surf++){
+    let since=infSolidSince[surf];
+    for(let z=0;z<25;z++){
+      if(chunk[z][surf]===0){ since=0; }
+      else{
+        since++;
+        if(since>=MAX_SOLID&&z>2){
+          chunk[z][surf]=0;
+          if(z+1<25) chunk[z+1][surf]=0;
+          since=0;
+        }
+      }
+    }
+    infSolidSince[surf]=since;
+  }
   return chunk;
 }
 
@@ -966,7 +984,7 @@ function startInfiniteMode(){
   GameState.gameplay.isGameOver=false;
   GameState.gameplay.playerAlive=true;
   GameState.stats.distance=0;
-  infSegs=[]; infCol=0; infDist=0; deathGuard=false;
+  infSegs=[]; infCol=0; infDist=0; deathGuard=false; infSolidSince=[0,0,0,0];
   // Pre-generate 4 chunks
   const initialSegs=[];
   // First 5 columns always solid
