@@ -84,6 +84,7 @@ body { background:#000; overflow:hidden; font-family:system-ui,sans-serif; }
 </style>
 </head>
 <body>
+<audio id="bg-music" src="Jaunty Gumption.mp3" loop preload="auto" style="display:none"></audio>
 <canvas id="gameCanvas"></canvas>
 <div id="ui-root"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
@@ -629,6 +630,16 @@ function mkSegs(len,gaps){
   for(const g of gaps||[]){
     for(let i=g.z;i<Math.min(g.z+g.w,len);i++) s[i][g.s]=0;
   }
+  // Extra pass: any solid run longer than 8 on a surface gets a 2-wide gap at its midpoint
+  for(let surf=0;surf<4;surf++){
+    let rs=0;
+    for(let z=0;z<=len;z++){
+      if(z===len||s[z][surf]===0){
+        if(z-rs>8&&rs>3){const m=rs+Math.floor((z-rs)/2);s[m][surf]=0;if(m+1<len)s[m+1][surf]=0;}
+        rs=z+1;
+      }
+    }
+  }
   return s;
 }
 
@@ -906,7 +917,7 @@ const LEVELS=[null, // index 0 unused
 let deathGuard=false, distTimer=0;
 let infSegs=[], infCol=0, infDist=0;
 
-function densityFor(m){ return m<500?.50:m<1000?.70:m<2000?.85:.95; }
+function densityFor(m){ return m<500?.75:m<1000?.88:m<2000?.96:1; }
 function maxGapFor(m){ return m<500?4:m<1000?5:m<2000?6:7; }
 
 function genInfiniteChunk(){
@@ -914,7 +925,7 @@ function genInfiniteChunk(){
   const density=densityFor(dist);
   const maxW=maxGapFor(dist);
   // probability of using 2 or 3 simultaneous surface gaps
-  const multiProb=dist<500?.25:dist<1000?.60:dist<2000?.80:.95;
+  const multiProb=dist<500?.50:dist<1000?.75:dist<2000?.90:.98;
   const chunk=[];
   for(let i=0;i<25;i++) chunk.push([1,1,1,1]);
   let i=3;
@@ -1032,8 +1043,8 @@ window.addEventListener('level:complete',()=>{
   GameState.gameplay.mode='menu';
   setTimeout(()=>window.dispatchEvent(new CustomEvent('levelmode:complete',{detail:{level:n}})),300);
 });
-window.addEventListener('menu:playLevel',(e)=>startLevel(e.detail?.level||1));
-window.addEventListener('menu:infiniteMode',startInfiniteMode);
+window.addEventListener('menu:playLevel',(e)=>{ startLevel(e.detail?.level||1); window.GameUI&&window.GameUI.startMusic(); });
+window.addEventListener('menu:infiniteMode',()=>{ startInfiniteMode(); window.GameUI&&window.GameUI.startMusic(); });
 window.addEventListener('game:pause',()=>{ GameState.gameplay.isPaused=true; });
 window.addEventListener('game:resume',()=>{ GameState.gameplay.isPaused=false; });
 
@@ -1057,6 +1068,7 @@ window.GameLogic={
 'use strict';
 let audioCtx=null, musicGain=null, sfxGain=null;
 let musicPlaying=false;
+let bgMusicEl=null;
 const root=document.getElementById('ui-root');
 
 function initAudio(){
@@ -1123,30 +1135,17 @@ function playSound(name){
 }
 
 function startMusic(){
-  if(!audioCtx||musicPlaying) return;
+  if(musicPlaying) return;
   musicPlaying=true;
-  const notes=[110,138,165,220,138,165];
-  let beat=0;
-  const bpm=130, beatDur=60/bpm;
-  function scheduleBeat(){
-    const t=audioCtx.currentTime;
-    const f=notes[beat%notes.length];
-    const o=audioCtx.createOscillator();
-    const g=audioCtx.createGain();
-    o.type='sawtooth'; o.frequency.value=f;
-    const filt=audioCtx.createBiquadFilter();
-    filt.type='lowpass'; filt.frequency.value=800+Math.sin(beat*.3)*400;
-    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.7,t+.02);
-    g.gain.setValueAtTime(.7,t+beatDur*.6); g.gain.linearRampToValueAtTime(0,t+beatDur*.9);
-    o.connect(filt); filt.connect(g); g.connect(musicGain);
-    o.start(t); o.stop(t+beatDur);
-    beat++;
-    if(musicPlaying) setTimeout(scheduleBeat,(beatDur*.9)*1000);
-  }
-  scheduleBeat();
+  if(!bgMusicEl) bgMusicEl=document.getElementById('bg-music');
+  bgMusicEl.volume=GameState.settings.musicVolume/100*.7;
+  bgMusicEl.play().catch(e=>console.warn('Music play failed:',e));
 }
 
-function stopMusic(){ musicPlaying=false; }
+function stopMusic(){
+  musicPlaying=false;
+  if(bgMusicEl){ bgMusicEl.pause(); bgMusicEl.currentTime=0; }
+}
 
 function mk(tag,props={},text=''){
   const el=document.createElement(tag);
@@ -1253,6 +1252,7 @@ function buildSettings(){
       GameState.settings[key]=+sl.value; val.textContent=sl.value+'%';
       if(sfxGain&&key==='sfxVolume') sfxGain.gain.value=sl.value/100;
       if(musicGain&&key==='musicVolume') musicGain.gain.value=sl.value/100*.4;
+      if(bgMusicEl&&key==='musicVolume') bgMusicEl.volume=sl.value/100*.7;
       saveProgress();
     };
     row.appendChild(sl); row.appendChild(val);
@@ -1525,6 +1525,8 @@ window.GameUI={
   showPauseMenu(){ showScreen('screen-pause'); },
   updateHUD,
   playSound,
+  startMusic,
+  stopMusic,
   saveProgress,
   loadProgress
 };
