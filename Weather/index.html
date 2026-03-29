@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Dashboard</title>
+  <style>
+    :root {
+      --bg-from: #0d1b3e;
+      --bg-to: #1a0533;
+      --surface: rgba(255,255,255,0.07);
+      --surface-hover: rgba(255,255,255,0.11);
+      --border: rgba(255,255,255,0.12);
+      --border-bright: rgba(255,255,255,0.22);
+      --text: #f0f4ff;
+      --text-muted: #8b9dc3;
+      --accent: #5b8dee;
+      --accent-2: #a855f7;
+      --accent-3: #06b6d4;
+      --glow-chaos: rgba(251, 191, 36, 0.35);
+      --chaos-border: #fbbf24;
+      --error: #f87171;
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: linear-gradient(135deg, var(--bg-from) 0%, #0f0a2e 45%, var(--bg-to) 100%);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      padding: 32px 16px 60px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(90deg, #7eb3ff 0%, #c084fc 50%, #67e8f9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    .header .subtitle {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #34d399, #67e8f9, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 12px rgba(103,232,249,0.4));
+    }
+
+    /* ── Search bar ──────────────────────────────────────────────────────── */
+    .search-wrap {
+      max-width: 560px;
+      margin: 0 auto 36px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .search-wrap input[type="text"] {
+      flex: 1;
+      background: rgba(255,255,255,0.09);
+      border: 1px solid var(--border-bright);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 12px 18px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .search-wrap input[type="text"]::placeholder { color: var(--text-muted); }
+
+    .search-wrap input[type="text"]:focus {
+      border-color: var(--accent);
+      background: rgba(255,255,255,0.13);
+    }
+
+    .btn {
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 12px 20px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn:hover  { filter: brightness(1.15); }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+      border: 1px solid var(--border-bright);
+    }
+
+    /* ── City header ─────────────────────────────────────────────────────── */
+    .city-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .city-header h2 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #fff 30%, #c4b5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .city-header .conditions {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin-top: 6px;
+      text-transform: capitalize;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Grid ────────────────────────────────────────────────────────────── */
+    .grid {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    @media (max-width: 620px) {
+      .grid { grid-template-columns: 1fr; }
+      .header h1 { font-size: 1.8rem; }
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 22px 18px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
+      opacity: 0.6;
+      transition: opacity 0.3s;
+    }
+
+    .card:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-bright);
+    }
+
+    .card:hover::before { opacity: 1; }
+
+    .card.chaos-active {
+      border-color: var(--chaos-border);
+      box-shadow: 0 0 24px var(--glow-chaos), inset 0 0 30px rgba(251,191,36,0.04);
+    }
+
+    .card.chaos-active::before {
+      background: linear-gradient(90deg, #fbbf24, #f59e0b, #fde68a);
+      opacity: 1;
+    }
+
+    /* card accent strip colors per widget */
+    #card-temp::before     { background: linear-gradient(90deg, #f97316, #ef4444, #a855f7); }
+    #card-wind::before     { background: linear-gradient(90deg, #06b6d4, #3b82f6, #6366f1); }
+    #card-humidity::before { background: linear-gradient(90deg, #22d3ee, #06b6d4, #0284c7); }
+    #card-pressure::before { background: linear-gradient(90deg, #a78bfa, #8b5cf6, #6d28d9); }
+    #card-visibility::before { background: linear-gradient(90deg, #34d399, #10b981, #059669); }
+    #card-uv::before       { background: linear-gradient(90deg, #fde68a, #fbbf24, #f59e0b); }
+
+    .card.chaos-active::before {
+      background: linear-gradient(90deg, #fbbf24, #f59e0b, #fde68a) !important;
+    }
+
+    .card-icon {
+      font-size: 1.4rem;
+      line-height: 1;
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    .card-value {
+      font-size: 2.6rem;
+      font-weight: 800;
+      line-height: 1.05;
+      word-break: break-word;
+      min-height: 3rem;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    .card-value.small-val { font-size: 1.5rem; letter-spacing: -0.01em; }
+    .card-value.tiny-val  { font-size: 1.05rem; letter-spacing: 0; }
+
+    /* ── Controls ────────────────────────────────────────────────────────── */
+    .card-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    select {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border-bright);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+      outline: none;
+      cursor: pointer;
+      flex: 1;
+      transition: border-color 0.2s, background 0.2s;
+      appearance: auto;
+    }
+
+    select:focus, select:hover {
+      border-color: var(--accent);
+      background: rgba(255,255,255,0.13);
+    }
+
+    .wind-controls {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      align-items: center;
+    }
+
+    .wind-controls select { flex: 1; }
+
+    .wind-sep {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      font-weight: 600;
+    }
+
+    /* ── Spinner ─────────────────────────────────────────────────────────── */
+    .spinner-wrap {
+      max-width: 900px;
+      margin: 60px auto;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .spinner-wrap p { font-size: 0.95rem; }
+
+    /* ── Error ───────────────────────────────────────────────────────────── */
+    .error-msg {
+      max-width: 900px;
+      margin: 20px auto;
+      background: rgba(248, 113, 113, 0.1);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+      color: var(--error);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      font-size: 0.95rem;
+      text-align: center;
+    }
+
+    #weather-content { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Weather Dashboard</h1>
+  <p class="subtitle">✦ Everyday units available! ✦</p>
+</div>
+
+<div class="search-wrap">
+  <input type="hidden" id="api-key-input" />
+  <input type="text" id="city-input" placeholder="Enter a city..." value="Omaha" />
+  <button class="btn btn-primary" id="search-btn">Search</button>
+  <button class="btn btn-secondary" id="geo-btn">📍</button>
+</div>
+
+<div id="loading" style="display:none" class="spinner-wrap">
+  <div class="spinner"></div>
+  <p>Fetching weather data...</p>
+</div>
+<div id="error-box" class="error-msg" style="display:none"></div>
+
+<div id="weather-content">
+  <div class="city-header">
+    <h2 id="city-name"></h2>
+    <p class="conditions" id="city-conditions"></p>
+  </div>
+
+  <div class="grid">
+
+    <!-- Temperature -->
+    <div class="card" id="card-temp">
+      <div class="card-top">
+        <span class="card-icon">🌡️</span>
+        <span class="card-label">Temperature</span>
+      </div>
+      <div class="card-value" id="val-temp">--</div>
+      <div class="card-controls">
+        <select id="unit-temp">
+          <option value="c">°C — Celsius</option>
+          <option value="f">°F — Fahrenheit</option>
+          <option value="k">K — Kelvin</option>
+          <option value="pizza">% Pizza Oven</option>
+          <option value="country">🌍 Country Match</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Wind Speed -->
+    <div class="card" id="card-wind">
+      <div class="card-top">
+        <span class="card-icon">💨</span>
+        <span class="card-label">Wind Speed</span>
+      </div>
+      <div class="card-value small-val" id="val-wind">--</div>
+      <div class="card-controls">
+        <div class="wind-controls">
+          <select id="unit-wind-dist">
+            <option value="meters">meters</option>
+            <option value="km">km</option>
+            <option value="bananas">🍌 Bananas</option>
+            <option value="cats">🐱 Cats</option>
+            <option value="fields">🏈 Football Fields</option>
+            <option value="ears">👂 Human Ears</option>
+            <option value="country">🌍 Country Match</option>
+          </select>
+          <span class="wind-sep">per</span>
+          <select id="unit-wind-time">
+            <option value="second">second</option>
+            <option value="hour">hour</option>
+            <option value="year">year</option>
+            <option value="eon">eon</option>
+            <option value="dogyear">dog year</option>
+            <option value="fortnight">fortnight</option>
+            <option value="moon">moon</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Humidity -->
+    <div class="card" id="card-humidity">
+      <div class="card-top">
+        <span class="card-icon">💧</span>
+        <span class="card-label">Humidity</span>
+      </div>
+      <div class="card-value" id="val-humidity">--</div>
+      <div class="card-controls">
+        <select id="unit-humidity">
+          <option value="pct">% — Relative Humidity</option>
+          <option value="pools">🏊 Olympic Pools</option>
+          <option value="whales">🐋 Whale Bladders</option>
+          <option value="yomamas">👩‍👧 YO MAMAS</option>
+          <option value="country">🌍 Country Match</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Pressure -->
+    <div class="card" id="card-pressure">
+      <div class="card-top">
+        <span class="card-icon">🔵</span>
+        <span class="card-label">Pressure</span>
+      </div>
+      <div class="card-value" id="val-pressure">--</div>
+      <div class="card-controls">
+        <select id="unit-pressure">
+          <option value="hpa">hPa</option>
+          <option value="mmhg">mmHg</option>
+          <option value="chimps">🐒 Chimps/m²</option>
+          <option value="feathers">🪶 Feathers/m²</option>
+          <option value="barbells">🏋️ Barbells/m²</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Visibility -->
+    <div class="card" id="card-visibility">
+      <div class="card-top">
+        <span class="card-icon">👁️</span>
+        <span class="card-label">Visibility</span>
+      </div>
+      <div class="card-value" id="val-visibility">--</div>
+      <div class="card-controls">
+        <select id="unit-visibility">
+          <option value="km">km</option>
+          <option value="mi">miles</option>
+          <option value="freethrows">🏀 Free Throws</option>
+          <option value="pencil">✏️ Pencil Draws</option>
+          <option value="vatican">⛪ Vatican Lengths</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- UV Index -->
+    <div class="card" id="card-uv">
+      <div class="card-top">
+        <span class="card-icon">☀️</span>
+        <span class="card-label">UV Index</span>
+      </div>
+      <div class="card-value" id="val-uv">--</div>
+      <div class="card-controls">
+        <select id="unit-uv">
+          <option value="index">UV Index</option>
+          <option value="burn">⏱️ Minutes to Sunburn</option>
+          <option value="country">🌍 Country Match</option>
+        </select>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ─── State ────────────────────────────────────────────────────────────────
+  let state = {
+    temp_c: null,
+    wind_ms: null,
+    humidity_pct: null,
+    pressure_hpa: null,
+    visibility_m: null,
+    uv_index: null,
+  };
+
+  // ─── Country Match lookup ─────────────────────────────────────────────────
+  const COUNTRY_LOOKUP = [
+    { max: -10, label: 'Russia 🇷🇺' },
+    { max:  -5, label: 'Iceland 🇮🇸' },
+    { max:   0, label: 'Canada 🇨🇦' },
+    { max:   3, label: 'Norway 🇳🇴' },
+    { max:   6, label: 'Sweden 🇸🇪' },
+    { max:   9, label: 'Germany 🇩🇪' },
+    { max:  12, label: 'UK 🇬🇧' },
+    { max:  15, label: 'France 🇫🇷' },
+    { max:  18, label: 'Italy 🇮🇹' },
+    { max:  21, label: 'Spain 🇪🇸' },
+    { max:  24, label: 'Mexico 🇲🇽' },
+    { max:  27, label: 'India 🇮🇳' },
+    { max:  30, label: 'Thailand 🇹🇭' },
+    { max:  33, label: 'Saudi Arabia 🇸🇦' },
+    { max:  36, label: 'Niger 🇳🇪' },
+    { max: Infinity, label: 'Mali 🇲🇱' },
+  ];
+
+  function tempToCountry(t) {
+    for (const e of COUNTRY_LOOKUP) if (t <= e.max) return e.label;
+    return 'Mali 🇲🇱';
+  }
+
+  // Countries by average annual relative humidity (%)
+  const HUMIDITY_LOOKUP = [
+    { max: 35, label: 'Egypt 🇪🇬' },
+    { max: 45, label: 'Mongolia 🇲🇳' },
+    { max: 52, label: 'Iran 🇮🇷' },
+    { max: 57, label: 'Spain 🇪🇸' },
+    { max: 62, label: 'USA 🇺🇸' },
+    { max: 67, label: 'France 🇫🇷' },
+    { max: 72, label: 'Germany 🇩🇪' },
+    { max: 77, label: 'UK 🇬🇧' },
+    { max: 82, label: 'Japan 🇯🇵' },
+    { max: 87, label: 'Brazil 🇧🇷' },
+    { max: Infinity, label: 'Singapore 🇸🇬' },
+  ];
+
+  function humidityToCountry(h) {
+    for (const e of HUMIDITY_LOOKUP) if (h <= e.max) return e.label;
+    return 'Singapore 🇸🇬';
+  }
+
+  // Countries by average annual UV index
+  const UV_LOOKUP = [
+    { max: 1,  label: 'Iceland 🇮🇸' },
+    { max: 2,  label: 'Norway 🇳🇴' },
+    { max: 3,  label: 'Finland 🇫🇮' },
+    { max: 4,  label: 'UK 🇬🇧' },
+    { max: 5,  label: 'Germany 🇩🇪' },
+    { max: 6,  label: 'France 🇫🇷' },
+    { max: 7,  label: 'Spain 🇪🇸' },
+    { max: 8,  label: 'Mexico 🇲🇽' },
+    { max: 10, label: 'India 🇮🇳' },
+    { max: 12, label: 'Australia 🇦🇺' },
+    { max: Infinity, label: 'Saudi Arabia 🇸🇦' },
+  ];
+
+  function uvToCountry(uv) {
+    for (const e of UV_LOOKUP) if (uv <= e.max) return e.label;
+    return 'Saudi Arabia 🇸🇦';
+  }
+
+  // Countries by average wind speed (m/s)
+  const WIND_COUNTRY_LOOKUP = [
+    { max: 2,   label: 'Indonesia 🇮🇩' },
+    { max: 3,   label: 'Brazil 🇧🇷' },
+    { max: 3.5, label: 'India 🇮🇳' },
+    { max: 4,   label: 'Japan 🇯🇵' },
+    { max: 4.5, label: 'Germany 🇩🇪' },
+    { max: 5,   label: 'France 🇫🇷' },
+    { max: 5.5, label: 'UK 🇬🇧' },
+    { max: 6,   label: 'Netherlands 🇳🇱' },
+    { max: 7,   label: 'Ireland 🇮🇪' },
+    { max: 9,   label: 'New Zealand 🇳🇿' },
+    { max: Infinity, label: 'Falkland Islands 🇫🇰' },
+  ];
+
+  function windToCountry(ms) {
+    for (const e of WIND_COUNTRY_LOOKUP) if (ms <= e.max) return e.label;
+    return 'Falkland Islands 🇫🇰';
+  }
+
+  // ─── Chaos sets ───────────────────────────────────────────────────────────
+  const CHAOS_TEMP      = new Set(['pizza', 'country']);
+  const CHAOS_WIND_DIST = new Set(['bananas', 'cats', 'ears', 'country']);
+  const CHAOS_WIND_TIME = new Set(['eon', 'dogyear', 'moon']);
+  const CHAOS_HUMIDITY  = new Set(['pools', 'whales', 'yomamas', 'country']);
+  const CHAOS_PRESSURE  = new Set(['chimps', 'feathers', 'barbells']);
+  const CHAOS_VIS       = new Set(['freethrows', 'pencil', 'vatican']);
+  const CHAOS_UV        = new Set(['burn', 'country']);
+
+  // ─── Conversion data ──────────────────────────────────────────────────────
+  const DIST_FACTORS = { meters:1, km:0.001, bananas:5.0, cats:2.17, fields:0.01094, ears:15.38 };
+  const TIME_SECONDS = { second:1, hour:3600, year:31536000, eon:3.154e16, dogyear:220903200, fortnight:1209600, moon:2551392 };
+  const TIME_LABELS  = { second:'second', hour:'hour', year:'year', eon:'eon', dogyear:'dog year', fortnight:'fortnight', moon:'moon' };
+  const DIST_LABELS  = { meters:'meters', km:'km', bananas:'Bananas', cats:'Cats', fields:'Football Fields', ears:'Human Ears' };
+
+  function absHumidity(temp_c, humidity_pct) {
+    return (6.112 * Math.exp(17.67 * temp_c / (temp_c + 243.5)) * humidity_pct * 2.1674) / (273.15 + temp_c);
+  }
+
+  function fmt(n, decimals = 2) {
+    if (Math.abs(n) >= 1e12) return n.toExponential(2);
+    if (decimals === 0) return Math.round(n).toLocaleString();
+    return parseFloat(n.toFixed(decimals)).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: decimals,
+    });
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+  function setChaos(cardId, isChaos) {
+    document.getElementById(cardId).classList.toggle('chaos-active', isChaos);
+  }
+
+  function renderTemp() {
+    const unit = document.getElementById('unit-temp').value;
+    const el   = document.getElementById('val-temp');
+    const t = state.temp_c;
+    if (t === null) return;
+
+    let display;
+    if      (unit === 'c')       display = `${fmt(t, 1)} °C`;
+    else if (unit === 'f')       display = `${fmt(t * 9/5 + 32, 1)} °F`;
+    else if (unit === 'k')       display = `${fmt(t + 273.15, 2)} K`;
+    else if (unit === 'pizza')   display = `${fmt((t / 280) * 100, 1)}% 🍕`;
+    else if (unit === 'country') display = tempToCountry(t);
+
+    el.textContent = display;
+    el.className = 'card-value' + (unit === 'country' ? ' small-val' : '');
+    setChaos('card-temp', CHAOS_TEMP.has(unit));
+  }
+
+  function renderWind() {
+    const dist = document.getElementById('unit-wind-dist').value;
+    const time = document.getElementById('unit-wind-time').value;
+    const el   = document.getElementById('val-wind');
+    const timeSelect = document.getElementById('unit-wind-time');
+    const w = state.wind_ms;
+    if (w === null) return;
+
+    let display;
+    if (dist === 'country') {
+      display = windToCountry(w);
+      timeSelect.style.display = 'none';
+      document.querySelector('.wind-sep').style.display = 'none';
+    } else {
+      timeSelect.style.display = '';
+      document.querySelector('.wind-sep').style.display = '';
+      const val = w * DIST_FACTORS[dist] * TIME_SECONDS[time];
+      display = time === 'eon'
+        ? `${val.toExponential(2)} ${DIST_LABELS[dist]} per ${TIME_LABELS[time]}`
+        : `${fmt(val, 2)} ${DIST_LABELS[dist]} per ${TIME_LABELS[time]}`;
+    }
+
+    el.textContent = display;
+    const len = display.length;
+    el.className = len > 40 ? 'card-value tiny-val' : len > 25 ? 'card-value small-val' : 'card-value';
+    setChaos('card-wind', CHAOS_WIND_DIST.has(dist) || CHAOS_WIND_TIME.has(time));
+  }
+
+  function renderHumidity() {
+    const unit = document.getElementById('unit-humidity').value;
+    const el   = document.getElementById('val-humidity');
+    const h = state.humidity_pct, t = state.temp_c;
+    if (h === null) return;
+
+    let display;
+    if (unit === 'pct') {
+      display = `${fmt(h, 0)}%`;
+    } else if (unit === 'country') {
+      display = humidityToCountry(h);
+    } else {
+      const ah = absHumidity(t, h);
+      if      (unit === 'pools')   display = `${fmt(ah * 2500 / 500, 2)} bottles / Olympic Pool`;
+      else if (unit === 'whales')  display = `${fmt(ah * 0.02 / 0.5, 4)} bottles / Whale Bladder`;
+      else if (unit === 'yomamas') display = `${fmt(ah * 0.2  / 0.5, 3)} bottles / Yo Mama`;
+    }
+
+    el.textContent = display;
+    el.className = unit === 'yomamas'
+      ? 'card-value'
+      : 'card-value' + (display && display.length > 20 ? ' small-val' : '');
+    setChaos('card-humidity', CHAOS_HUMIDITY.has(unit));
+  }
+
+  function renderPressure() {
+    const unit = document.getElementById('unit-pressure').value;
+    const el   = document.getElementById('val-pressure');
+    const p = state.pressure_hpa;
+    if (p === null) return;
+
+    const pa = p * 100;
+    let display;
+    if      (unit === 'hpa')      display = `${fmt(p, 1)} hPa`;
+    else if (unit === 'mmhg')     display = `${fmt(p * 0.75006, 1)} mmHg`;
+    else if (unit === 'chimps')   display = `${fmt(pa / (45 * 9.81), 2)} Chimps/m²`;
+    else if (unit === 'feathers') display = `${Math.round(pa / (0.00001 * 9.81)).toLocaleString()} Feathers/m²`;
+    else if (unit === 'barbells') display = `${fmt(pa / (20 * 9.81), 2)} Barbells/m²`;
+
+    el.textContent = display;
+    const plen = display ? display.length : 0;
+    el.className = plen > 28 ? 'card-value tiny-val' : plen > 18 ? 'card-value small-val' : 'card-value';
+    setChaos('card-pressure', CHAOS_PRESSURE.has(unit));
+  }
+
+  function renderVisibility() {
+    const unit = document.getElementById('unit-visibility').value;
+    const el   = document.getElementById('val-visibility');
+    const v = state.visibility_m;
+    if (v === null) return;
+
+    let display;
+    if      (unit === 'km')         display = `${fmt(v / 1000, 2)} km`;
+    else if (unit === 'mi')         display = `${fmt(v / 1609.34, 2)} mi`;
+    else if (unit === 'freethrows') display = `${fmt(v / 4.572, 0)} Free Throws`;
+    else if (unit === 'pencil')     display = `${fmt(v / 50000, 3)} Pencil Draws`;
+    else if (unit === 'vatican')    display = `${fmt(v / 1050, 2)} Vatican Lengths`;
+
+    el.textContent = display;
+    el.className = 'card-value' + (display && display.length > 18 ? ' small-val' : '');
+    setChaos('card-visibility', CHAOS_VIS.has(unit));
+  }
+
+  function renderUV() {
+    const unit = document.getElementById('unit-uv').value;
+    const el   = document.getElementById('val-uv');
+    const uv = state.uv_index;
+    if (uv === null) return;
+
+    let display;
+    if      (unit === 'index')   display = `${fmt(uv, 1)}`;
+    else if (unit === 'burn')    display = uv < 1 ? '∞ min' : `${Math.round(200 / uv)} min`;
+    else if (unit === 'country') display = uvToCountry(uv);
+
+    el.textContent = display;
+    el.className = 'card-value';
+    setChaos('card-uv', CHAOS_UV.has(unit));
+  }
+
+  function renderAll() {
+    renderTemp(); renderWind(); renderHumidity();
+    renderPressure(); renderVisibility(); renderUV();
+  }
+
+  // ─── Listeners ────────────────────────────────────────────────────────────
+  document.getElementById('unit-temp').addEventListener('change', renderTemp);
+  document.getElementById('unit-wind-dist').addEventListener('change', renderWind);
+  document.getElementById('unit-wind-time').addEventListener('change', renderWind);
+  document.getElementById('unit-humidity').addEventListener('change', renderHumidity);
+  document.getElementById('unit-pressure').addEventListener('change', renderPressure);
+  document.getElementById('unit-visibility').addEventListener('change', renderVisibility);
+  document.getElementById('unit-uv').addEventListener('change', renderUV);
+
+  // ─── API helpers ──────────────────────────────────────────────────────────
+  function getApiKey() {
+    return document.getElementById('api-key-input').value.trim();
+  }
+
+  function showLoading(on) {
+    document.getElementById('loading').style.display = on ? 'block' : 'none';
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-box');
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+  }
+
+  function showContent(on) {
+    document.getElementById('weather-content').style.display = on ? 'block' : 'none';
+  }
+
+  // ─── Fetch ────────────────────────────────────────────────────────────────
+  async function fetchWeather(query) {
+    const key = getApiKey();
+    showLoading(true);
+    showError('');
+    showContent(false);
+
+    try {
+      const weatherUrl = typeof query === 'string'
+        ? `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(query)}&appid=${key}&units=metric`
+        : `https://api.openweathermap.org/data/2.5/weather?lat=${query.lat}&lon=${query.lon}&appid=${key}&units=metric`;
+
+      const res  = await fetch(weatherUrl);
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = data.message || 'Unknown error';
+        throw new Error(msg.charAt(0).toUpperCase() + msg.slice(1));
+      }
+
+      state.temp_c       = data.main.temp;
+      state.wind_ms      = data.wind ? data.wind.speed : 0;
+      state.humidity_pct = data.main.humidity;
+      state.pressure_hpa = data.main.pressure;
+      state.visibility_m = data.visibility != null ? data.visibility : 10000;
+
+      // UV via One Call API
+      try {
+        const { lat, lon } = data.coord;
+        const uvRes  = await fetch(`https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,daily,alerts&appid=${key}`);
+        const uvData = await uvRes.json();
+        state.uv_index = (uvRes.ok && uvData.current && uvData.current.uvi != null)
+          ? uvData.current.uvi : 0;
+      } catch { state.uv_index = 0; }
+
+      document.getElementById('city-name').textContent = `${data.name}, ${data.sys.country}`;
+      document.getElementById('city-conditions').textContent =
+        data.weather && data.weather[0] ? data.weather[0].description : '';
+
+      renderAll();
+      showContent(true);
+
+    } catch (err) {
+      showError(`Could not load weather: ${err.message}`);
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // ─── Events ───────────────────────────────────────────────────────────────
+  document.getElementById('search-btn').addEventListener('click', () => {
+    const city = document.getElementById('city-input').value.trim();
+    if (city) fetchWeather(city);
+  });
+
+  document.getElementById('city-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const city = document.getElementById('city-input').value.trim();
+      if (city) fetchWeather(city);
+    }
+  });
+
+  document.getElementById('geo-btn').addEventListener('click', () => {
+    if (!navigator.geolocation) { showError('Geolocation not supported.'); return; }
+    showLoading(true);
+    showError('');
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      try {
+        const key = getApiKey();
+        const r = await fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${key}`);
+        const d = await r.json();
+        if (d && d.length > 0) {
+          document.getElementById('city-input').value = d[0].name;
+          await fetchWeather(d[0].name);
+        } else {
+          await fetchWeather({ lat, lon });
+        }
+      } catch { await fetchWeather({ lat, lon }); }
+    }, err => { showLoading(false); showError(`Geolocation error: ${err.message}`); });
+  });
+
+  // ─── Init ─────────────────────────────────────────────────────────────────
+  (function init() {
+    document.getElementById('api-key-input').value = '8c380bb6eff747b81a9ad6a2472fd9dd';
+    fetchWeather('Omaha');
+  })();
+</script>
+</body>
+</html>
