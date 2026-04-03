@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drug Safety Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Disclaimer (first visit) ─────────────────────────────────────────── -->
+  <div id="disclaimer-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2>Before You Begin</h2>
+      <p>
+        Drug Safety Explorer is an <strong>educational tool only</strong>. It uses publicly
+        available data from the FDA's OpenFDA API to help you explore adverse event reports,
+        recall history, and drug class interactions.
+      </p>
+      <p>
+        This tool does <strong>not</strong> constitute medical advice. Always consult a
+        licensed healthcare provider before making any decisions about medications.
+      </p>
+      <p class="modal-attr">
+        Data sourced from the OpenFDA API (open.fda.gov) — provided by the U.S. Food &amp;
+        Drug Administration.
+      </p>
+      <button id="dismiss-disclaimer" class="btn-primary">I Understand</button>
+    </div>
+  </div>
+
+  <!-- ── Education modal ──────────────────────────────────────────────────── -->
+  <div id="edu-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <button class="modal-close" id="close-edu-modal" aria-label="Close">×</button>
+      <div id="edu-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- ── Drug class modal ─────────────────────────────────────────────────── -->
+  <div id="class-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <button class="modal-close" id="close-class-modal" aria-label="Close">×</button>
+      <div id="class-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- ── Toasts ────────────────────────────────────────────────────────────── -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- ── Header ────────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <span class="header-icon">⊕</span>
+      <h1>Drug Safety Explorer</h1>
+    </div>
+    <div class="header-right">
+      <button class="btn-ghost" id="about-btn">
+        <span class="icon">?</span> About
+      </button>
+      <button class="btn-ghost warning" id="disclaimer-btn">
+        <span class="icon">!</span> Disclaimer
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Three-panel layout ────────────────────────────────────────────────── -->
+  <main class="three-panel">
+
+    <!-- LEFT: Drug Class Explorer -->
+    <aside class="panel panel-left">
+      <div class="panel-header">
+        <h2>Drug Classes</h2>
+      </div>
+
+      <div class="class-search-wrap">
+        <input type="text" id="class-search" placeholder="Search a drug class…" autocomplete="off">
+      </div>
+
+      <div class="curated-classes">
+        <div class="panel-section-label">Curated Classes</div>
+        <div id="curated-class-list"></div>
+      </div>
+
+      <div id="class-search-results" class="class-search-results hidden">
+        <div class="panel-section-label">Search Results</div>
+        <div id="class-search-drugs"></div>
+      </div>
+    </aside>
+
+    <!-- CENTER: Polypharmacy Panel -->
+    <section class="panel panel-center">
+      <div class="panel-header">
+        <h2>My Medications</h2>
+        <span id="drug-count" class="count-badge">0 / 8</span>
+      </div>
+
+      <div class="drug-search-wrap">
+        <input type="text" id="drug-search" placeholder="Search and add a medication…" autocomplete="off">
+        <div id="drug-suggestions" class="suggestions-dropdown hidden"></div>
+      </div>
+
+      <div id="drug-list" class="drug-list">
+        <div class="empty-state" id="empty-state">
+          <p>Add medications above to begin<br>your safety analysis.</p>
+        </div>
+        <div id="drug-cards"></div>
+      </div>
+
+      <div class="panel-footer">
+        <button id="clear-all-btn" class="btn-ghost" disabled>Clear All</button>
+        <button id="analyze-btn"   class="btn-primary" disabled>Analyze Safety</button>
+      </div>
+    </section>
+
+    <!-- RIGHT: Risk Analysis Dashboard -->
+    <aside class="panel panel-right">
+      <div class="panel-header">
+        <h2>Risk Analysis</h2>
+      </div>
+
+      <div id="risk-placeholder" class="risk-placeholder">
+        <p>Add medications and click <strong>Analyze Safety</strong> to see your risk analysis.</p>
+      </div>
+
+      <div id="risk-content" class="hidden">
+
+        <!-- SVG Gauge -->
+        <div class="gauge-section">
+          <div class="gauge-wrap">
+            <svg id="risk-gauge" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg"
+                 aria-label="Risk score gauge"></svg>
+            <div class="gauge-labels">
+              <span id="risk-score-num" class="risk-score-number">—</span>
+              <span id="risk-tier-label" class="risk-tier">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Factor breakdown -->
+        <div class="factor-cards">
+          <div class="factor-card">
+            <div class="factor-title">
+              AE Volume
+              <button class="info-btn" data-edu="ae" aria-label="What are adverse events?">?</button>
+            </div>
+            <div class="factor-value" id="fv-ae">—</div>
+            <div class="factor-pts"  id="fp-ae">— pts</div>
+          </div>
+          <div class="factor-card">
+            <div class="factor-title">Severity</div>
+            <div class="factor-value" id="fv-sev">—</div>
+            <div class="factor-pts"  id="fp-sev">— pts</div>
+          </div>
+          <div class="factor-card">
+            <div class="factor-title">
+              Recall History
+              <button class="info-btn" data-edu="recall" aria-label="What is a drug recall?">?</button>
+            </div>
+            <div class="factor-value" id="fv-recall">—</div>
+            <div class="factor-pts"  id="fp-recall">— pts</div>
+          </div>
+          <div class="factor-card">
+            <div class="factor-title">Class Overlap</div>
+            <div class="factor-value" id="fv-overlap">—</div>
+            <div class="factor-pts"  id="fp-overlap">— pts</div>
+          </div>
+        </div>
+
+        <!-- Recall alerts -->
+        <div id="recall-banner" class="hidden">
+          <div class="section-header">
+            Recall Alerts
+            <button class="info-btn" data-edu="recall" aria-label="What is a drug recall?">?</button>
+          </div>
+          <div id="recall-list"></div>
+        </div>
+
+        <!-- Overlap matrix -->
+        <div id="matrix-section" class="hidden">
+          <div class="section-header">Drug Class Overlap Matrix</div>
+          <div id="class-matrix"></div>
+        </div>
+
+        <!-- AE chart -->
+        <div id="ae-chart-section">
+          <div class="section-header">
+            Top Adverse Events
+            <button class="info-btn" data-edu="ae" aria-label="What are adverse events?">?</button>
+          </div>
+          <canvas id="ae-chart"></canvas>
+        </div>
+
+      </div><!-- #risk-content -->
+    </aside>
+
+  </main>
+
+  <!-- ── Footer ────────────────────────────────────────────────────────────── -->
+  <footer>
+    <span>⚕</span>
+    Educational use only. Data sourced from the
+    <a href="https://open.fda.gov" target="_blank" rel="noopener">OpenFDA API</a>.
+    This tool does not constitute medical advice. Always consult a licensed healthcare provider.
+    OpenFDA data is provided by the U.S. Food &amp; Drug Administration.
+  </footer>
+
+  <script src="data/drug-classes.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
