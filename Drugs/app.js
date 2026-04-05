@@ -12,14 +12,14 @@ let analyzing   = false;
 let selectedIdx = -1;   // typeahead keyboard selection
 
 /* ── FDA API ──────────────────────────────────────────────────────────────── */
-async function fdaGet(path, params = {}) {
+async function fdaGet(path, params = {}, signal = null) {
   const url = new URL(FDA_BASE + path);
   url.searchParams.set('api_key', FDA_KEY);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
   let delay = 500;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(url.toString());
+    const res = await fetch(url.toString(), signal ? { signal } : {});
     if (res.status === 404)  return null;
     if (res.status === 429)  { await sleep(delay); delay *= 2; continue; }
     if (!res.ok)             throw new Error(`FDA ${res.status}`);
@@ -29,6 +29,11 @@ async function fdaGet(path, params = {}) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ── Search cache & abort ─────────────────────────────────────────────────── */
+const _searchCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let   _searchAbort = null;
 
 async function fetchAETotal(name) {
   return fdaGet('/drug/event.json', {
@@ -55,11 +60,27 @@ async function fetchRecalls(name) {
     limit:  5
   });
 }
+
+// Prefix-wildcard label search with per-query caching and abort support
 async function fetchLabel(query) {
-  return fdaGet('/drug/label.json', {
-    search: `openfda.brand_name:"${query}" OR openfda.generic_name:"${query}"`,
-    limit:  6
-  });
+  const key    = query.trim().toLowerCase();
+  const cached = _searchCache.get(key);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.data;
+
+  if (_searchAbort) _searchAbort.abort();
+  _searchAbort = new AbortController();
+
+  // Use first token as wildcard prefix: "lip" → brand_name:lip* catches Lipitor, Lisinopril, etc.
+  const prefix = key.split(/\s+/)[0].replace(/[^a-z0-9]/gi, '');
+  if (!prefix) return null;
+
+  const data = await fdaGet('/drug/label.json', {
+    search: `openfda.brand_name:${prefix}* OR openfda.generic_name:${prefix}*`,
+    limit:  8
+  }, _searchAbort.signal);
+
+  if (data) _searchCache.set(key, { data, ts: Date.now() });
+  return data;
 }
 
 /* ── Drug Panel ───────────────────────────────────────────────────────────── */
@@ -160,7 +181,10 @@ function initDrugSearch() {
     selectedIdx = -1;
     const q = e.target.value.trim();
     if (q.length < 2) { hideDropdown(); return; }
-    searchTimer = setTimeout(() => runDrugSearch(q), 300);
+    // Show local results instantly, then fire API after short debounce
+    const local = searchLocal(q);
+    if (local.length) showDropdown(local, true);
+    searchTimer = setTimeout(() => runDrugSearch(q, local), 150);
   });
 
   input.addEventListener('keydown', e => {
@@ -192,58 +216,102 @@ function updateActiveItem(items) {
   if (selectedIdx >= 0) items[selectedIdx].scrollIntoView({ block: 'nearest' });
 }
 
-async function runDrugSearch(q) {
+// Instant local search against curated DRUG_CLASS_MAP (0ms, no network)
+function searchLocal(q) {
+  const ql  = q.toLowerCase();
+  const out = [];
+  // Pass 1: prefix matches (higher confidence)
+  for (const [cls, { drugs }] of Object.entries(DRUG_CLASS_MAP)) {
+    for (const drug of drugs) {
+      if (drug.toLowerCase().startsWith(ql)) {
+        out.push({ brand: drug, generic: '', cls });
+        if (out.length >= 3) return out;
+      }
+    }
+  }
+  // Pass 2: substring matches
+  for (const [cls, { drugs }] of Object.entries(DRUG_CLASS_MAP)) {
+    for (const drug of drugs) {
+      const dl = drug.toLowerCase();
+      if (!dl.startsWith(ql) && dl.includes(ql) && !out.some(r => r.brand === drug)) {
+        out.push({ brand: drug, generic: '', cls });
+        if (out.length >= 3) return out;
+      }
+    }
+  }
+  return out;
+}
+
+function normalizeAPIResults(results) {
+  return (results || [])
+    .map(r => ({
+      brand:   r.openfda?.brand_name?.[0]     || '',
+      generic: r.openfda?.generic_name?.[0]   || '',
+      cls:     r.openfda?.pharm_class_epc?.[0] || ''
+    }))
+    .filter(r => r.brand || r.generic);
+}
+
+function mergeResults(local, api) {
+  const seen = new Set(local.map(r => (r.brand || r.generic).toLowerCase()));
+  const fresh = api.filter(r => !seen.has((r.brand || r.generic).toLowerCase()));
+  return [...local, ...fresh].slice(0, 6);
+}
+
+async function runDrugSearch(q, local = []) {
   const dropdown = document.getElementById('drug-suggestions');
-  dropdown.innerHTML = '<div class="suggestion-loading">Searching…</div>';
-  dropdown.classList.remove('hidden');
+  if (!local.length) {
+    dropdown.innerHTML = '<div class="suggestion-loading">Searching…</div>';
+    dropdown.classList.remove('hidden');
+  }
 
   try {
-    const data = await fetchLabel(q);
-    if (!data?.results?.length) {
+    const data   = await fetchLabel(q);
+    const api    = normalizeAPIResults(data?.results);
+    const merged = mergeResults(local, api);
+    if (merged.length) {
+      showDropdown(merged, false);
+    } else if (!local.length) {
       dropdown.innerHTML = '<div class="suggestion-none">No results found</div>';
-      return;
+    } else {
+      showDropdown(local, false); // keep local, remove spinner
     }
-    renderDropdown(data.results);
-  } catch {
-    dropdown.innerHTML = '<div class="suggestion-none">Search unavailable</div>';
+  } catch (e) {
+    if (e.name === 'AbortError') return; // superseded by a newer query — do nothing
+    if (!local.length) dropdown.innerHTML = '<div class="suggestion-none">Search unavailable</div>';
+    else showDropdown(local, false);
   }
 }
 
-function renderDropdown(results) {
+function showDropdown(items, isLoading) {
   const dropdown = document.getElementById('drug-suggestions');
-  const items = results.slice(0, 6).filter(r => {
-    return r.openfda?.brand_name?.[0] || r.openfda?.generic_name?.[0];
-  });
 
-  if (!items.length) {
-    dropdown.innerHTML = '<div class="suggestion-none">No results found</div>';
-    return;
-  }
-
-  dropdown.innerHTML = items.map(r => {
-    const brand  = r.openfda?.brand_name?.[0]      || '';
-    const generic= r.openfda?.generic_name?.[0]     || '';
-    const cls    = r.openfda?.pharm_class_epc?.[0]  || '';
-    const display= brand || generic;
+  let html = items.map(r => {
+    const display  = r.brand || r.generic;
+    const clsLabel = r.cls ? r.cls.replace(/\s*\[.*?\]/g, '') : '';
     return `
       <div class="suggestion-item"
-           data-brand="${escAttr(brand)}"
-           data-generic="${escAttr(generic)}"
-           data-class="${escAttr(cls)}">
+           data-brand="${escAttr(r.brand)}"
+           data-generic="${escAttr(r.generic)}"
+           data-class="${escAttr(r.cls)}">
         <span class="suggestion-name">${esc(display)}</span>
-        ${generic && generic !== brand
-          ? `<span class="suggestion-generic">${esc(generic)}</span>` : ''}
-        ${cls ? `<span class="suggestion-class">${esc(cls.replace(/\s*\[.*?\]/g,''))}</span>` : ''}
+        ${r.generic && r.generic !== r.brand
+          ? `<span class="suggestion-generic">${esc(r.generic)}</span>` : ''}
+        ${clsLabel ? `<span class="suggestion-class">${esc(clsLabel)}</span>` : ''}
       </div>
     `;
   }).join('');
 
+  if (isLoading) {
+    html += '<div class="suggestion-loading suggestion-loading-inline">Finding more…</div>';
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.classList.remove('hidden');
+
   dropdown.querySelectorAll('.suggestion-item').forEach(item => {
     item.addEventListener('click', () => {
-      const brand   = item.dataset.brand;
-      const generic = item.dataset.generic;
-      const cls     = item.dataset.class;
-      addDrug(brand || generic, brand, generic, cls);
+      addDrug(item.dataset.brand || item.dataset.generic, item.dataset.brand, item.dataset.generic, item.dataset.class);
       document.getElementById('drug-search').value = '';
       hideDropdown();
     });

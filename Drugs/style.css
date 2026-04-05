@@ -326,6 +326,13 @@ main.three-panel {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+.suggestion-loading-inline {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.72rem;
+  border-top: 1px solid var(--border);
+  opacity: 0.6;
+  font-style: italic;
+}
 
 .drug-list {
   flex: 1;
