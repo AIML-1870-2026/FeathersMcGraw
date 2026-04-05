@@ -6,6 +6,15 @@ const FDA_KEY    = 'KYTR43yahC3OQRPCj2dyIM7q68gJ3C7OMH0EvGpg';
 const MAX_DRUGS  = 8;
 const DRUG_COLORS = ['#4f8ef7','#f7914f','#4ff79a','#f74f91','#c084fc','#f7e44f','#4ff7f7','#fb923c'];
 
+// Known clinical drug-class interaction pairs [classA, classB, points, description]
+const INTERACTION_PAIRS = [
+  ['NSAIDs',         'Anticoagulants',  12, 'GI & internal bleeding risk'],
+  ['SSRIs',          'NSAIDs',           8, 'GI bleeding & serotonin risk'],
+  ['ACE Inhibitors', 'NSAIDs',           6, 'Kidney function stress'],
+  ['SSRIs',          'Opioids',          5, 'Serotonin syndrome risk'],
+  ['Statins',        'Antipsychotics',   4, 'Myopathy & metabolism risk'],
+];
+
 /* ── State ────────────────────────────────────────────────────────────────── */
 let panel       = [];   // [{ name, brandName, genericName, pharmClass, fdaClass }]
 let analyzing   = false;
@@ -58,6 +67,14 @@ async function fetchRecalls(name) {
   return fdaGet('/drug/enforcement.json', {
     search: `openfda.generic_name:"${name}" OR openfda.brand_name:"${name}"`,
     limit:  5
+  });
+}
+
+// Fetch count of AE reports with a specific outcome flag (e.g. seriousnessdeath:1)
+async function fetchAEOutcome(name, outcomeFilter) {
+  return fdaGet('/drug/event.json', {
+    search: `patient.drug.medicinalproduct:"${name}" AND ${outcomeFilter}`,
+    limit:  1
   });
 }
 
@@ -463,9 +480,13 @@ async function runAnalysis() {
       if (!data) { el.innerHTML = '<span class="chip chip-unknown">No FDA Records</span>'; return; }
 
       const chips = [];
-      if ((data.recalls || []).length > 0) chips.push('<span class="chip chip-recall">Active Recall</span>');
-      if (data.totalEvents > 0)            chips.push('<span class="chip chip-ae">Adverse Events Found</span>');
-      if (chips.length === 0)              chips.push('<span class="chip chip-clean">Clean</span>');
+      if ((data.recalls || []).length > 0) chips.push('<span class="chip chip-recall">Has Recalls</span>');
+      const dr = data.totalEvents > 0 ? data.deathEvents / data.totalEvents : 0;
+      const hr = data.totalEvents > 0 ? data.hospEvents  / data.totalEvents : 0;
+      if (dr > 0.08)        chips.push('<span class="chip chip-recall">High Fatal Rate</span>');
+      else if (dr > 0.03)   chips.push('<span class="chip chip-ae">Fatalities Reported</span>');
+      if (hr > 0.35)        chips.push('<span class="chip chip-ae">High Hosp. Rate</span>');
+      if (chips.length === 0) chips.push('<span class="chip chip-clean">Low Concern</span>');
       el.innerHTML = chips.join('');
     });
 
@@ -491,52 +512,77 @@ async function runAnalysis() {
 }
 
 async function fetchDrugData(name) {
-  const [total, serious, reactions, recalls] = await Promise.allSettled([
+  const [total, deaths, hospit, lt, reactions, recalls] = await Promise.allSettled([
     fetchAETotal(name),
-    fetchAESerious(name),
+    fetchAEOutcome(name, 'seriousnessdeath:1'),
+    fetchAEOutcome(name, 'seriousnesshospitalization:1'),
+    fetchAEOutcome(name, 'seriousnesslifethreatening:1'),
     fetchTopReactions(name),
     fetchRecalls(name)
   ]);
 
   return {
     name,
-    totalEvents:   total.status     === 'fulfilled' ? (total.value?.meta?.results?.total    ?? 0) : 0,
-    seriousEvents: serious.status   === 'fulfilled' ? (serious.value?.meta?.results?.total  ?? 0) : 0,
-    topReactions:  reactions.status === 'fulfilled' ? (reactions.value?.results              || []) : [],
-    recalls:       recalls.status   === 'fulfilled' ? (recalls.value?.results                || []) : []
+    totalEvents: total.status    === 'fulfilled' ? (total.value?.meta?.results?.total    ?? 0) : 0,
+    deathEvents: deaths.status   === 'fulfilled' ? (deaths.value?.meta?.results?.total   ?? 0) : 0,
+    hospEvents:  hospit.status   === 'fulfilled' ? (hospit.value?.meta?.results?.total   ?? 0) : 0,
+    ltEvents:    lt.status       === 'fulfilled' ? (lt.value?.meta?.results?.total        ?? 0) : 0,
+    topReactions:reactions.status=== 'fulfilled' ? (reactions.value?.results              || []) : [],
+    recalls:     recalls.status  === 'fulfilled' ? (recalls.value?.results                || []) : []
   };
 }
 
 /* ── Risk Score ───────────────────────────────────────────────────────────── */
+// Scoring is RATE-based, not count-based, so popular drugs aren't unfairly penalized.
+// Thresholds are set so common OTC drugs (ibuprofen, aspirin) score 20-35,
+// while genuinely high-risk drugs and dangerous combinations score 65+.
+//
+// Formula (max 100):
+//   Fatal Outcomes    0-30 pts  death rate vs 12% ceiling
+//   Hospitalization   0-30 pts  (hosp + life-threatening rate) vs 60% ceiling
+//   Recall Status     0-15 pts  worst recall class in the panel
+//   Interactions      0-25 pts  known pharmacological interaction pairs
+
 function calculateRisk(drugData) {
-  let totalEvents = 0, seriousEvents = 0, maxRecallScore = 0;
+  let totalEvents = 0, deathEvents = 0, hospEvents = 0, ltEvents = 0, maxRecallScore = 0;
 
   drugData.forEach(({ data }) => {
     if (!data) return;
-    totalEvents   += data.totalEvents;
-    seriousEvents += data.seriousEvents;
+    totalEvents  += data.totalEvents;
+    deathEvents  += data.deathEvents;
+    hospEvents   += data.hospEvents;
+    ltEvents     += data.ltEvents;
 
     data.recalls.forEach(r => {
       const cls = r.classification || '';
-      const pts = cls.includes('Class I') && !cls.includes('Class II') && !cls.includes('Class III') ? 20
-                : cls.includes('Class II') && !cls.includes('Class III') ? 12
-                : cls.includes('Class III') ? 6 : 0;
+      const pts = cls.includes('Class I')   && !cls.includes('Class II')  ? 15
+                : cls.includes('Class II')  && !cls.includes('Class III') ? 8
+                : cls.includes('Class III')                                ? 4 : 0;
       maxRecallScore = Math.max(maxRecallScore, pts);
     });
   });
 
-  const aeScore      = Math.round(Math.min(totalEvents / 50000, 1) * 35);
-  const sevScore     = totalEvents > 0 ? Math.round((seriousEvents / totalEvents) * 30) : 0;
-  const recallScore  = Math.min(maxRecallScore, 20);
+  const deathRate = totalEvents > 0 ? deathEvents / totalEvents : 0;
+  const sevRate   = totalEvents > 0 ? (hospEvents + ltEvents) / totalEvents : 0;
+
+  // Each rate scored against a clinical ceiling; capped at max pts
+  const deathScore   = Math.round(Math.min(deathRate / 0.12, 1) * 30); // 12% fatal rate = max
+  const hospScore    = Math.round(Math.min(sevRate   / 0.60, 1) * 30); // 60% severe rate = max
+  const recallScore  = Math.min(maxRecallScore, 15);
   const overlapScore = calcOverlap();
-  const total        = Math.min(aeScore + sevScore + recallScore + overlapScore, 100);
+  const total        = Math.min(deathScore + hospScore + recallScore + overlapScore, 100);
 
-  const [tier, tierClass] = total < 25 ? ['Low Risk','low']
-                          : total < 50 ? ['Moderate','med']
-                          : total < 75 ? ['High','high']
-                          :              ['Critical','crit'];
+  const [tier, tierClass] = total < 21 ? ['Low Risk', 'low']
+                          : total < 41 ? ['Moderate', 'med']
+                          : total < 66 ? ['High',     'high']
+                          :              ['Critical', 'crit'];
 
-  return { score: total, tier, tierClass, aeScore, sevScore, recallScore, overlapScore, totalEvents, seriousEvents };
+  return {
+    score: total, tier, tierClass,
+    deathScore, hospScore, recallScore, overlapScore,
+    totalEvents, deathEvents, hospEvents, ltEvents,
+    deathRate, sevRate
+  };
 }
 
 function calcOverlap() {
@@ -546,14 +592,26 @@ function calcOverlap() {
     for (let j = i + 1; j < classes.length; j++) {
       const a = classes[i], b = classes[j];
       if (!a || !b || a === 'Unknown' || b === 'Unknown') continue;
-      if (a === b) {
-        pts += CNS_DEPRESSANT_CLASSES.has(a) ? 5 : 3;
-      } else if (CNS_DEPRESSANT_CLASSES.has(a) && CNS_DEPRESSANT_CLASSES.has(b)) {
-        pts += 5;
+
+      // CNS depressant combinations — synergistic respiratory depression
+      if (CNS_DEPRESSANT_CLASSES.has(a) && CNS_DEPRESSANT_CLASSES.has(b)) {
+        pts += a === b ? 8 : 12;
+        continue;
       }
+
+      // Known clinical interaction pairs
+      let matched = false;
+      for (const [ca, cb, addPts] of INTERACTION_PAIRS) {
+        if ((a === ca && b === cb) || (a === cb && b === ca)) {
+          pts += addPts; matched = true; break;
+        }
+      }
+
+      // Same class, non-CNS — generally additive risk
+      if (!matched && a === b) pts += 3;
     }
   }
-  return Math.min(pts, 15);
+  return Math.min(pts, 25);
 }
 
 /* ── Gauge ────────────────────────────────────────────────────────────────── */
@@ -589,9 +647,9 @@ function renderGauge(score) {
 }
 
 function riskColor(s) {
-  if (s < 25) return 'var(--risk-low)';
-  if (s < 50) return 'var(--risk-med)';
-  if (s < 75) return 'var(--risk-high)';
+  if (s < 21) return 'var(--risk-low)';
+  if (s < 41) return 'var(--risk-med)';
+  if (s < 66) return 'var(--risk-high)';
   return 'var(--risk-crit)';
 }
 
@@ -615,31 +673,36 @@ function setTierLabel(tier, tierClass) {
 
 /* ── Factor Cards ─────────────────────────────────────────────────────────── */
 function renderFactorLoading() {
-  ['fv-ae','fv-sev','fv-recall','fv-overlap'].forEach(id => {
+  ['fv-death','fv-hosp','fv-recall','fv-overlap'].forEach(id => {
     document.getElementById(id).textContent = '…';
   });
-  ['fp-ae','fp-sev','fp-recall','fp-overlap'].forEach(id => {
+  ['fp-death','fp-hosp','fp-recall','fp-overlap'].forEach(id => {
     document.getElementById(id).textContent = '…';
   });
 }
 
-function renderFactorCards({ aeScore, sevScore, recallScore, overlapScore, totalEvents, seriousEvents }) {
-  document.getElementById('fv-ae').textContent  = totalEvents.toLocaleString() + ' reports';
-  document.getElementById('fp-ae').textContent  = `${aeScore} / 35 pts`;
+function renderFactorCards({ deathScore, hospScore, recallScore, overlapScore, totalEvents, deathRate, sevRate }) {
+  const pct = v => (v * 100).toFixed(1) + '%';
 
-  const sevPct = totalEvents > 0 ? Math.round(seriousEvents / totalEvents * 100) : 0;
-  document.getElementById('fv-sev').textContent = `${sevPct}% serious`;
-  document.getElementById('fp-sev').textContent = `${sevScore} / 30 pts`;
+  document.getElementById('fv-death').textContent = totalEvents > 0 ? pct(deathRate) + ' of reports' : 'No data';
+  document.getElementById('fp-death').textContent = `${deathScore} / 30 pts`;
 
-  const recallLabel = recallScore === 20 ? 'Class I'
-                    : recallScore === 12 ? 'Class II'
-                    : recallScore ===  6 ? 'Class III'
+  document.getElementById('fv-hosp').textContent  = totalEvents > 0 ? pct(sevRate)   + ' of reports' : 'No data';
+  document.getElementById('fp-hosp').textContent  = `${hospScore} / 30 pts`;
+
+  const recallLabel = recallScore === 15 ? 'Class I'
+                    : recallScore ===  8 ? 'Class II'
+                    : recallScore ===  4 ? 'Class III'
                     :                      'None found';
   document.getElementById('fv-recall').textContent = recallLabel;
-  document.getElementById('fp-recall').textContent = `${recallScore} / 20 pts`;
+  document.getElementById('fp-recall').textContent = `${recallScore} / 15 pts`;
 
-  document.getElementById('fv-overlap').textContent = `${panel.length} drug${panel.length !== 1 ? 's' : ''}`;
-  document.getElementById('fp-overlap').textContent = `${overlapScore} / 15 pts`;
+  const interactionLabel = overlapScore === 0 ? 'None detected'
+                         : overlapScore < 8   ? 'Low'
+                         : overlapScore < 16  ? 'Moderate'
+                         :                      'High';
+  document.getElementById('fv-overlap').textContent = interactionLabel;
+  document.getElementById('fp-overlap').textContent = `${overlapScore} / 25 pts`;
 }
 
 /* ── Recall Banner ────────────────────────────────────────────────────────── */
@@ -707,9 +770,10 @@ function renderMatrix() {
 
   html += `
     <div class="matrix-legend">
-      <span class="legend-item"><span class="legend-dot cell-none"></span> No overlap</span>
+      <span class="legend-item"><span class="legend-dot cell-none"></span> No interaction</span>
       <span class="legend-item"><span class="legend-dot cell-same"></span> Same class</span>
-      <span class="legend-item"><span class="legend-dot cell-cns"></span>  CNS risk pair</span>
+      <span class="legend-item"><span class="legend-dot cell-interaction"></span> Known interaction</span>
+      <span class="legend-item"><span class="legend-dot cell-cns"></span> CNS risk</span>
     </div>
   `;
 
@@ -717,16 +781,25 @@ function renderMatrix() {
 }
 
 function overlapType(a, b) {
-  if (!a || !b || a === 'Unknown' || b === 'Unknown') return { cls: 'cell-none', label: 'Unknown' };
+  if (!a || !b || a === 'Unknown' || b === 'Unknown') return { cls: 'cell-none', label: 'No data' };
+
   if (a === b) {
     return CNS_DEPRESSANT_CLASSES.has(a)
-      ? { cls: 'cell-cns',  label: 'Same CNS class — high risk' }
-      : { cls: 'cell-same', label: 'Same class' };
+      ? { cls: 'cell-cns',  label: 'Same CNS class — synergistic respiratory depression' }
+      : { cls: 'cell-same', label: 'Same class — additive risk possible' };
   }
+
   if (CNS_DEPRESSANT_CLASSES.has(a) && CNS_DEPRESSANT_CLASSES.has(b)) {
-    return { cls: 'cell-cns', label: 'CNS depressant combination — high risk' };
+    return { cls: 'cell-cns', label: 'CNS depressant pair — high respiratory depression risk' };
   }
-  return { cls: 'cell-none', label: 'No significant overlap' };
+
+  for (const [ca, cb, , label] of INTERACTION_PAIRS) {
+    if ((a === ca && b === cb) || (a === cb && b === ca)) {
+      return { cls: 'cell-interaction', label };
+    }
+  }
+
+  return { cls: 'cell-none', label: 'No known significant interaction' };
 }
 
 /* ── AE Chart (Canvas) ────────────────────────────────────────────────────── */
@@ -862,11 +935,13 @@ function clearResults() {
 
 /* ── Education Modals ─────────────────────────────────────────────────────── */
 const EDU = {
-  ae: {
-    title: 'What are Adverse Events?',
+  outcomes: {
+    title: 'Fatal & Hospitalization Rates — How to Read This',
     body: `
-      <p>An adverse event report is a record submitted to the FDA when a patient, caregiver, or healthcare provider suspects that a drug contributed to a harmful outcome. The FDA's MedWatch system collects these reports voluntarily and from manufacturers.</p>
-      <p><strong>Important:</strong> Adverse event reports indicate an <em>association</em>, not proven causation. High report counts may reflect widespread drug use, active surveillance campaigns, or heightened public awareness — not necessarily higher danger.</p>
+      <p>These percentages show what fraction of FDA adverse event reports for this drug involved a death or hospitalization as an outcome.</p>
+      <p><strong>Critical context:</strong> These are <em>reported associations</em>, not proven causes. Someone who takes ibuprofen for knee pain and later dies in a car accident may appear in this data. The FDA's system is also heavily biased toward serious outcomes — mild side effects are rarely reported at all.</p>
+      <p>Widely-used drugs tend to have higher absolute report counts, but the <em>rate</em> is what matters here. A drug used by 500 million people with a 4% death rate in reports is vastly safer than one used by 10,000 people with a 40% death rate in reports.</p>
+      <p>Use these numbers as relative signals, not absolute danger assessments, and always weigh them against your doctor's advice.</p>
     `
   },
   recall: {
@@ -876,9 +951,24 @@ const EDU = {
       <ul>
         <li><strong>Class I</strong> — Serious adverse health consequences or death are probable.</li>
         <li><strong>Class II</strong> — Temporary or medically reversible adverse consequences are probable.</li>
-        <li><strong>Class III</strong> — The product is unlikely to cause adverse health consequences, but violates FDA regulations.</li>
+        <li><strong>Class III</strong> — The product is unlikely to cause adverse health consequences, but violates FDA labeling or manufacturing regulations.</li>
       </ul>
-      <p>Not all recalls mean a drug is currently dangerous — many are precautionary.</p>
+      <p>Not all recalls mean a drug is currently dangerous — many are precautionary or affect specific lots. A Class III recall on an otherwise safe drug is very different from a Class I recall.</p>
+    `
+  },
+  interactions: {
+    title: 'Drug Interaction Risk',
+    body: `
+      <p>Drug interactions occur when two or more medications affect each other in the body — amplifying side effects, reducing effectiveness, or creating new risks that neither drug causes alone.</p>
+      <p><strong>Combinations flagged by this tool:</strong></p>
+      <ul>
+        <li><strong>CNS depressants</strong> (opioids + benzodiazepines + antipsychotics) — synergistic respiratory depression; leading cause of overdose deaths</li>
+        <li><strong>NSAIDs + anticoagulants</strong> — dramatically increased GI and internal bleeding risk</li>
+        <li><strong>SSRIs + NSAIDs</strong> — increased GI bleeding; potential serotonin effects</li>
+        <li><strong>ACE inhibitors + NSAIDs</strong> — reduced kidney function, especially in elderly or dehydrated patients</li>
+        <li><strong>SSRIs + opioids</strong> — serotonin syndrome risk, particularly with tramadol</li>
+      </ul>
+      <p>This list covers well-established interactions; your specific medications may have others. Always review interactions with a pharmacist.</p>
     `
   }
 };

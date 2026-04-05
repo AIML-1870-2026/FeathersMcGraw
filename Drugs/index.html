@@ -138,35 +138,42 @@
               <span id="risk-tier-label" class="risk-tier">—</span>
             </div>
           </div>
+          <p class="gauge-context">Score based on FDA report <em>outcome rates</em>, not raw counts — normalized for drug popularity</p>
         </div>
 
         <!-- Factor breakdown -->
         <div class="factor-cards">
           <div class="factor-card">
             <div class="factor-title">
-              AE Volume
-              <button class="info-btn" data-edu="ae" aria-label="What are adverse events?">?</button>
+              Fatal Outcomes
+              <button class="info-btn" data-edu="outcomes" aria-label="About fatal outcome rates">?</button>
             </div>
-            <div class="factor-value" id="fv-ae">—</div>
-            <div class="factor-pts"  id="fp-ae">— pts</div>
-          </div>
-          <div class="factor-card">
-            <div class="factor-title">Severity</div>
-            <div class="factor-value" id="fv-sev">—</div>
-            <div class="factor-pts"  id="fp-sev">— pts</div>
+            <div class="factor-value" id="fv-death">—</div>
+            <div class="factor-pts"  id="fp-death">— / 30 pts</div>
           </div>
           <div class="factor-card">
             <div class="factor-title">
-              Recall History
+              Hospitalization
+              <button class="info-btn" data-edu="outcomes" aria-label="About hospitalization rates">?</button>
+            </div>
+            <div class="factor-value" id="fv-hosp">—</div>
+            <div class="factor-pts"  id="fp-hosp">— / 30 pts</div>
+          </div>
+          <div class="factor-card">
+            <div class="factor-title">
+              Recall Status
               <button class="info-btn" data-edu="recall" aria-label="What is a drug recall?">?</button>
             </div>
             <div class="factor-value" id="fv-recall">—</div>
-            <div class="factor-pts"  id="fp-recall">— pts</div>
+            <div class="factor-pts"  id="fp-recall">— / 15 pts</div>
           </div>
           <div class="factor-card">
-            <div class="factor-title">Class Overlap</div>
+            <div class="factor-title">
+              Interactions
+              <button class="info-btn" data-edu="interactions" aria-label="About drug interactions">?</button>
+            </div>
             <div class="factor-value" id="fv-overlap">—</div>
-            <div class="factor-pts"  id="fp-overlap">— pts</div>
+            <div class="factor-pts"  id="fp-overlap">— / 25 pts</div>
           </div>
         </div>
 

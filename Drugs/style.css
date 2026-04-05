@@ -518,6 +518,16 @@ main.three-panel {
   gap: 0.2rem;
   margin-top: -0.5rem;
 }
+.gauge-context {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.5;
+  padding: 0 1rem 0.5rem;
+  max-width: 260px;
+  margin: 0 auto;
+}
+.gauge-context em { color: var(--accent); font-style: normal; }
 .risk-score-number {
   font-family: var(--font-mono);
   font-size: 2.4rem;
@@ -664,10 +674,11 @@ main.three-panel {
   color: var(--text-muted);
 }
 .matrix-cell:hover { transform: scale(1.15); z-index: 1; }
-.cell-self { background: var(--border); color: var(--text-muted); }
-.cell-none { background: var(--surface-2); border: 1px solid var(--border); }
-.cell-same { background: rgba(245,158,11,0.3); border: 1px solid rgba(245,158,11,0.5); }
-.cell-cns  { background: rgba(239,68,68,0.35); border: 1px solid rgba(239,68,68,0.5); }
+.cell-self        { background: var(--border); color: var(--text-muted); }
+.cell-none        { background: var(--surface-2); border: 1px solid var(--border); }
+.cell-same        { background: rgba(245,158,11,0.25); border: 1px solid rgba(245,158,11,0.45); }
+.cell-interaction { background: rgba(251,146,60,0.30); border: 1px solid rgba(251,146,60,0.55); }
+.cell-cns         { background: rgba(239,68,68,0.35);  border: 1px solid rgba(239,68,68,0.5);  }
 
 .matrix-legend {
   display: flex;
