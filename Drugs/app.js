@@ -1,13 +1,15 @@
 'use strict';
 
 /* ── Constants ────────────────────────────────────────────────────────────── */
-const FDA_BASE = 'https://api.fda.gov';
-const FDA_KEY  = 'KYTR43yahC3OQRPCj2dyIM7q68gJ3C7OMH0EvGpg';
-const MAX_DRUGS = 8;
+const FDA_BASE   = 'https://api.fda.gov';
+const FDA_KEY    = 'KYTR43yahC3OQRPCj2dyIM7q68gJ3C7OMH0EvGpg';
+const MAX_DRUGS  = 8;
+const DRUG_COLORS = ['#4f8ef7','#f7914f','#4ff79a','#f74f91','#c084fc','#f7e44f','#4ff7f7','#fb923c'];
 
 /* ── State ────────────────────────────────────────────────────────────────── */
-let panel     = [];   // [{ name, brandName, genericName, pharmClass, fdaClass }]
-let analyzing = false;
+let panel       = [];   // [{ name, brandName, genericName, pharmClass, fdaClass }]
+let analyzing   = false;
+let selectedIdx = -1;   // typeahead keyboard selection
 
 /* ── FDA API ──────────────────────────────────────────────────────────────── */
 async function fdaGet(path, params = {}) {
@@ -49,7 +51,7 @@ async function fetchTopReactions(name) {
 }
 async function fetchRecalls(name) {
   return fdaGet('/drug/enforcement.json', {
-    search: `product_description:"${name}"`,
+    search: `openfda.generic_name:"${name}" OR openfda.brand_name:"${name}"`,
     limit:  5
   });
 }
@@ -155,18 +157,39 @@ function initDrugSearch() {
 
   input.addEventListener('input', e => {
     clearTimeout(searchTimer);
+    selectedIdx = -1;
     const q = e.target.value.trim();
     if (q.length < 2) { hideDropdown(); return; }
     searchTimer = setTimeout(() => runDrugSearch(q), 300);
   });
 
   input.addEventListener('keydown', e => {
-    if (e.key === 'Escape') hideDropdown();
+    if (e.key === 'Escape') { hideDropdown(); return; }
+    const items = dropdown.querySelectorAll('.suggestion-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIdx = Math.min(selectedIdx + 1, items.length - 1);
+      updateActiveItem(items);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIdx = Math.max(selectedIdx - 1, 0);
+      updateActiveItem(items);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIdx >= 0 && items[selectedIdx]) items[selectedIdx].click();
+      else if (items.length > 0) items[0].click();
+    }
   });
 
   document.addEventListener('click', e => {
     if (!input.contains(e.target) && !dropdown.contains(e.target)) hideDropdown();
   });
+}
+
+function updateActiveItem(items) {
+  items.forEach((item, i) => item.classList.toggle('active', i === selectedIdx));
+  if (selectedIdx >= 0) items[selectedIdx].scrollIntoView({ block: 'nearest' });
 }
 
 async function runDrugSearch(q) {
@@ -228,6 +251,7 @@ function renderDropdown(results) {
 }
 
 function hideDropdown() {
+  selectedIdx = -1;
   document.getElementById('drug-suggestions').classList.add('hidden');
 }
 
@@ -327,9 +351,10 @@ function showClassModal(className) {
   `;
 
   content.querySelectorAll('.btn-add-small').forEach(btn =>
-    btn.addEventListener('click', () =>
-      addDrug(btn.dataset.drug, btn.dataset.drug, '', btn.dataset.class)
-    )
+    btn.addEventListener('click', () => {
+      const added = addDrug(btn.dataset.drug, btn.dataset.drug, '', btn.dataset.class);
+      if (added) showToast(`Added ${btn.dataset.drug}`);
+    })
   );
 
   document.getElementById('class-modal').classList.remove('hidden');
@@ -351,6 +376,7 @@ async function runAnalysis() {
   });
 
   showRiskContent();
+  renderFactorLoading();
 
   try {
     const settled = await Promise.allSettled(
@@ -383,7 +409,7 @@ async function runAnalysis() {
     setTierLabel(risk.tier, risk.tierClass);
     renderFactorCards(risk);
     renderRecallBanner(drugData);
-    renderMatrix(drugData);
+    renderMatrix();
     renderAEChart(drugData);
 
   } catch (err) {
@@ -406,10 +432,10 @@ async function fetchDrugData(name) {
 
   return {
     name,
-    totalEvents:   total.value?.meta?.results?.total    ?? 0,
-    seriousEvents: serious.value?.meta?.results?.total  ?? 0,
-    topReactions:  reactions.value?.results              || [],
-    recalls:       recalls.value?.results                || []
+    totalEvents:   total.status     === 'fulfilled' ? (total.value?.meta?.results?.total    ?? 0) : 0,
+    seriousEvents: serious.status   === 'fulfilled' ? (serious.value?.meta?.results?.total  ?? 0) : 0,
+    topReactions:  reactions.status === 'fulfilled' ? (reactions.value?.results              || []) : [],
+    recalls:       recalls.status   === 'fulfilled' ? (recalls.value?.results                || []) : []
   };
 }
 
@@ -508,6 +534,7 @@ function animateScore(target) {
   const t = setInterval(() => {
     curr = Math.min(curr + step, target);
     el.textContent = Math.round(curr);
+    el.style.color = riskColor(curr);
     if (curr >= target) clearInterval(t);
   }, 16);
 }
@@ -519,6 +546,15 @@ function setTierLabel(tier, tierClass) {
 }
 
 /* ── Factor Cards ─────────────────────────────────────────────────────────── */
+function renderFactorLoading() {
+  ['fv-ae','fv-sev','fv-recall','fv-overlap'].forEach(id => {
+    document.getElementById(id).textContent = '…';
+  });
+  ['fp-ae','fp-sev','fp-recall','fp-overlap'].forEach(id => {
+    document.getElementById(id).textContent = '…';
+  });
+}
+
 function renderFactorCards({ aeScore, sevScore, recallScore, overlapScore, totalEvents, seriousEvents }) {
   document.getElementById('fv-ae').textContent  = totalEvents.toLocaleString() + ' reports';
   document.getElementById('fp-ae').textContent  = `${aeScore} / 35 pts`;
@@ -627,10 +663,12 @@ function overlapType(a, b) {
 
 /* ── AE Chart (Canvas) ────────────────────────────────────────────────────── */
 function renderAEChart(drugData) {
-  const canvas = document.getElementById('ae-chart');
-  const dpr    = window.devicePixelRatio || 1;
-  const W      = canvas.clientWidth  || 320;
-  const H      = 220;
+  const canvas   = document.getElementById('ae-chart');
+  const dpr      = window.devicePixelRatio || 1;
+  const W        = canvas.offsetWidth || 320;
+  const hasMulti = drugData.length > 1;
+  const H        = 220;
+  const PB       = hasMulti ? 32 : 10;
 
   canvas.width        = W * dpr;
   canvas.height       = H * dpr;
@@ -641,17 +679,28 @@ function renderAEChart(drugData) {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
 
-  // Aggregate reactions
-  const map = {};
-  drugData.forEach(({ data }) => {
+  // Assign a color per drug
+  const colorMap = {};
+  drugData.forEach(({ drug }, i) => { colorMap[drug.name] = DRUG_COLORS[i % DRUG_COLORS.length]; });
+
+  // Aggregate reactions, tracking which drug contributed most to each
+  const reactionMap = {};
+  drugData.forEach(({ drug, data }) => {
     (data?.topReactions || []).forEach(r => {
       const t = (r.term || '').toLowerCase();
-      if (t) map[t] = (map[t] || 0) + (r.count || 0);
+      if (!t) return;
+      if (!reactionMap[t]) reactionMap[t] = { total: 0, byDrug: {} };
+      reactionMap[t].total += (r.count || 0);
+      reactionMap[t].byDrug[drug.name] = (reactionMap[t].byDrug[drug.name] || 0) + (r.count || 0);
     });
   });
 
-  const reactions = Object.entries(map)
-    .sort((a, b) => b[1] - a[1])
+  const reactions = Object.entries(reactionMap)
+    .map(([term, d]) => {
+      const dominant = Object.entries(d.byDrug).sort((a, b) => b[1] - a[1])[0];
+      return { term, total: d.total, color: dominant ? colorMap[dominant[0]] : DRUG_COLORS[0] };
+    })
+    .sort((a, b) => b.total - a.total)
     .slice(0, 10);
 
   if (!reactions.length) {
@@ -663,24 +712,22 @@ function renderAEChart(drugData) {
     return;
   }
 
-  const PL = 118, PR = 48, PT = 10, PB = 10;
+  const PL = 118, PR = 48, PT = 10;
   const chartW  = W - PL - PR;
   const count   = reactions.length;
   const totalH  = H - PT - PB;
   const barH    = Math.min(16, Math.floor(totalH / count) - 4);
   const spacing = (totalH - barH * count) / Math.max(count - 1, 1);
-  const maxVal  = reactions[0][1];
+  const maxVal  = reactions[0].total;
 
-  reactions.forEach(([term, val], i) => {
+  reactions.forEach(({ term, total, color }, i) => {
     const y    = PT + i * (barH + spacing);
-    const barW = (val / maxVal) * chartW;
+    const barW = (total / maxVal) * chartW;
 
-    // Bar
-    ctx.fillStyle = '#4f8ef7';
+    ctx.fillStyle = color;
     roundRect(ctx, PL, y, Math.max(barW, 2), barH, 3);
     ctx.fill();
 
-    // Label (left)
     const label = capitalize(term);
     ctx.fillStyle    = '#6b7080';
     ctx.font         = `11px 'DM Mono', monospace`;
@@ -688,12 +735,31 @@ function renderAEChart(drugData) {
     ctx.textBaseline = 'middle';
     ctx.fillText(label.length > 15 ? label.slice(0, 14) + '…' : label, PL - 6, y + barH / 2);
 
-    // Count (right of bar)
     ctx.fillStyle = '#e8eaf0';
     ctx.textAlign = 'left';
     ctx.font      = `10px 'DM Mono', monospace`;
-    ctx.fillText(val.toLocaleString(), PL + barW + 5, y + barH / 2);
+    ctx.fillText(total.toLocaleString(), PL + barW + 5, y + barH / 2);
   });
+
+  // Drug color legend (only shown when multiple drugs)
+  if (hasMulti) {
+    let legendX = PL;
+    const legendY = H - 12;
+    ctx.font         = `10px 'DM Mono', monospace`;
+    ctx.textBaseline = 'middle';
+    drugData.forEach(({ drug }, i) => {
+      if (legendX > W - 30) return;
+      const color = DRUG_COLORS[i % DRUG_COLORS.length];
+      const name  = drug.brandName || drug.name;
+      const label = name.length > 10 ? name.slice(0, 9) + '…' : name;
+      ctx.fillStyle = color;
+      ctx.fillRect(legendX, legendY - 4, 8, 8);
+      ctx.fillStyle = '#6b7080';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, legendX + 11, legendY);
+      legendX += ctx.measureText(label).width + 22;
+    });
+  }
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -802,7 +868,7 @@ function escAttr(s) {
   return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function escId(s) {
-  return (s || '').replace(/[^a-z0-9]/gi, '_');
+  return Array.from(s || '').map(c => /[a-z0-9]/i.test(c) ? c : c.charCodeAt(0)).join('');
 }
 
 /* ── Bootstrap ────────────────────────────────────────────────────────────── */
