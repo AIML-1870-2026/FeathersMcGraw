@@ -16,9 +16,11 @@ const INTERACTION_PAIRS = [
 ];
 
 /* ── State ────────────────────────────────────────────────────────────────── */
-let panel       = [];   // [{ name, brandName, genericName, pharmClass, fdaClass }]
-let analyzing   = false;
-let selectedIdx = -1;   // typeahead keyboard selection
+let panel        = [];   // [{ name, brandName, genericName, pharmClass, fdaClass }]
+let analyzing    = false;
+let selectedIdx  = -1;   // typeahead keyboard selection
+let _lastRisk     = null;
+let _lastDrugData = null;
 
 /* ── FDA API ──────────────────────────────────────────────────────────────── */
 async function fdaGet(path, params = {}, signal = null) {
@@ -301,11 +303,31 @@ async function runDrugSearch(q, local = []) {
 }
 
 function showDropdown(items, isLoading) {
-  const dropdown = document.getElementById('drug-suggestions');
+  const dropdown  = document.getElementById('drug-suggestions');
+  const hasCurrent = panel.length > 0;
 
   let html = items.map(r => {
     const display  = r.brand || r.generic;
     const clsLabel = r.cls ? r.cls.replace(/\s*\[.*?\]/g, '') : '';
+
+    let previewHTML = '';
+    if (hasCurrent) {
+      const preview = getInteractionPreview(r.brand, r.generic, r.cls);
+      if (preview) {
+        const badgeCls = preview.type === 'cns'  ? 'preview-cns'
+                       : preview.type === 'safe'  ? 'preview-safe'
+                       :                            'preview-interaction';
+        const icon = preview.type === 'safe' ? '✓' : '⚠';
+        previewHTML = `<span class="preview-badge ${badgeCls}">${icon} ${esc(preview.label)}</span>`;
+      }
+    }
+
+    const rightParts = [];
+    if (clsLabel)    rightParts.push(`<span class="suggestion-class">${esc(clsLabel)}</span>`);
+    if (previewHTML) rightParts.push(previewHTML);
+    const rightHTML = rightParts.length
+      ? `<div class="suggestion-right">${rightParts.join('')}</div>` : '';
+
     return `
       <div class="suggestion-item"
            data-brand="${escAttr(r.brand)}"
@@ -314,7 +336,7 @@ function showDropdown(items, isLoading) {
         <span class="suggestion-name">${esc(display)}</span>
         ${r.generic && r.generic !== r.brand
           ? `<span class="suggestion-generic">${esc(r.generic)}</span>` : ''}
-        ${clsLabel ? `<span class="suggestion-class">${esc(clsLabel)}</span>` : ''}
+        ${rightHTML}
       </div>
     `;
   }).join('');
@@ -333,6 +355,59 @@ function showDropdown(items, isLoading) {
       hideDropdown();
     });
   });
+}
+
+// Variant of calcOverlap() that takes an explicit panel array rather than the global
+function calcOverlapForPanel(panelArr) {
+  let pts = 0;
+  const classes = panelArr.map(d => d.fdaClass);
+  for (let i = 0; i < classes.length; i++) {
+    for (let j = i + 1; j < classes.length; j++) {
+      const a = classes[i], b = classes[j];
+      if (!a || !b || a === 'Unknown' || b === 'Unknown') continue;
+
+      if (CNS_DEPRESSANT_CLASSES.has(a) && CNS_DEPRESSANT_CLASSES.has(b)) {
+        pts += a === b ? 8 : 12;
+        continue;
+      }
+
+      let matched = false;
+      for (const [ca, cb, addPts] of INTERACTION_PAIRS) {
+        if ((a === ca && b === cb) || (a === cb && b === ca)) {
+          pts += addPts; matched = true; break;
+        }
+      }
+      if (!matched && a === b) pts += 3;
+    }
+  }
+  return Math.min(pts, 25);
+}
+
+// Returns a preview badge descriptor for a candidate drug vs the current panel
+function getInteractionPreview(brand, generic, pharmClass) {
+  if (panel.length === 0) return null;
+  const fdaClass = detectClass(brand || generic, generic, pharmClass);
+  if (!fdaClass || fdaClass === 'Unknown') return null;
+
+  const currentOverlap = calcOverlapForPanel(panel);
+  const newOverlap     = calcOverlapForPanel([...panel, { fdaClass }]);
+  const delta          = Math.max(0, newOverlap - currentOverlap);
+
+  if (delta === 0) return { type: 'safe', label: 'No interactions' };
+
+  // Identify the primary interaction type for labeling
+  const existingClasses = panel.map(d => d.fdaClass);
+  if (CNS_DEPRESSANT_CLASSES.has(fdaClass) && existingClasses.some(c => CNS_DEPRESSANT_CLASSES.has(c))) {
+    return { type: 'cns', label: `+${delta}pts · CNS combo`, delta };
+  }
+  for (const [ca, cb] of INTERACTION_PAIRS) {
+    for (const c of existingClasses) {
+      if ((fdaClass === ca && c === cb) || (fdaClass === cb && c === ca)) {
+        return { type: 'interaction', label: `+${delta}pts · interaction`, delta };
+      }
+    }
+  }
+  return { type: 'overlap', label: `+${delta}pts · same class`, delta };
 }
 
 function hideDropdown() {
@@ -492,14 +567,17 @@ async function runAnalysis() {
 
     // Score & render
     const risk = calculateRisk(drugData);
+    _lastRisk     = risk;
+    _lastDrugData = drugData;
 
     renderGauge(risk.score);
     animateScore(risk.score);
     setTierLabel(risk.tier, risk.tierClass);
     renderFactorCards(risk);
     renderRecallBanner(drugData);
-    renderMatrix();
+    renderGraph();
     renderAEChart(drugData);
+    showPrintBtn();
 
   } catch (err) {
     showToast('Analysis failed. Please try again.');
@@ -931,6 +1009,8 @@ function clearResults() {
   document.getElementById('risk-score-num').textContent = '—';
   document.getElementById('risk-tier-label').textContent = '—';
   document.getElementById('risk-tier-label').className   = 'risk-tier';
+  hidePrintBtn();
+  _lastRisk = null; _lastDrugData = null;
 }
 
 /* ── Education Modals ─────────────────────────────────────────────────────── */
@@ -992,6 +1072,224 @@ function showAboutModal() {
   document.getElementById('edu-modal').classList.remove('hidden');
 }
 
+/* ── Force-Directed Interaction Graph ────────────────────────────────────── */
+const NODE_FILLS   = ['#dce8ff','#ffe8dc','#dcffe8','#ffdce8','#e8dcff','#fffbdc','#dcfff9','#ffe5dc'];
+const NODE_STROKES = ['#4880f5','#f7914f','#16a34a','#f74f91','#c084fc','#c2720a','#0e8f86','#fb923c'];
+
+function renderGraph() {
+  const section = document.getElementById('graph-section');
+  if (panel.length < 2) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+
+  const W = 320, H = 200;
+
+  // Nodes — start near center with small random offset
+  const nodes = panel.map((d, i) => ({
+    id: i, name: d.name, fdaClass: d.fdaClass,
+    x: W/2 + (Math.random() - 0.5) * 60,
+    y: H/2 + (Math.random() - 0.5) * 60,
+    vx: 0, vy: 0
+  }));
+
+  // Edges — only pairs with a known interaction
+  const edges = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const ov = overlapType(panel[i].fdaClass, panel[j].fdaClass);
+      if (ov.cls !== 'cell-none') {
+        edges.push({ source: i, target: j, type: ov.cls, label: ov.label });
+      }
+    }
+  }
+
+  const sim = { nodes, edges, W, H };
+  for (let t = 0; t < 280; t++) tickForce(sim);
+  drawGraphSVG(document.getElementById('interaction-graph'), sim);
+
+  // Legend
+  const legendItems = [];
+  if (edges.some(e => e.type === 'cell-cns'))         legendItems.push(['#d63030', 'CNS risk']);
+  if (edges.some(e => e.type === 'cell-interaction'))  legendItems.push(['#ea580c', 'Known interaction']);
+  if (edges.some(e => e.type === 'cell-same'))         legendItems.push(['#c2720a', 'Same class']);
+  document.getElementById('graph-legend').innerHTML = legendItems.map(([c, l]) =>
+    `<span class="graph-legend-item"><svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="${c}" stroke-width="2"/></svg>${esc(l)}</span>`
+  ).join('');
+}
+
+function tickForce(sim) {
+  const { nodes, edges, W, H } = sim;
+  const REPULSION   = 3800;
+  const SPRING_K    = 0.05;
+  const TARGET_LEN  = 95;
+  const CENTER_PULL = 0.02;
+  const DAMPING     = 0.72;
+
+  nodes.forEach(n => {
+    n.vx += (W/2 - n.x) * CENTER_PULL;
+    n.vy += (H/2 - n.y) * CENTER_PULL;
+
+    nodes.forEach(m => {
+      if (m === n) return;
+      const dx = n.x - m.x, dy = n.y - m.y;
+      const d2 = dx*dx + dy*dy || 1;
+      const d  = Math.sqrt(d2);
+      const f  = REPULSION / d2;
+      n.vx += (dx/d) * f;
+      n.vy += (dy/d) * f;
+    });
+  });
+
+  edges.forEach(e => {
+    const s = nodes[e.source], t = nodes[e.target];
+    const dx = t.x - s.x, dy = t.y - s.y;
+    const d  = Math.sqrt(dx*dx + dy*dy) || 1;
+    const fx = (dx/d) * (d - TARGET_LEN) * SPRING_K;
+    const fy = (dy/d) * (d - TARGET_LEN) * SPRING_K;
+    s.vx += fx; s.vy += fy;
+    t.vx -= fx; t.vy -= fy;
+  });
+
+  nodes.forEach(n => {
+    n.vx *= DAMPING; n.vy *= DAMPING;
+    n.x = Math.max(26, Math.min(sim.W - 26, n.x + n.vx));
+    n.y = Math.max(18, Math.min(sim.H - 18, n.y + n.vy));
+  });
+}
+
+function drawGraphSVG(svg, { nodes, edges, W, H }) {
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const edgeStroke = { 'cell-cns': '#d63030', 'cell-interaction': '#ea580c', 'cell-same': '#c2720a' };
+  const edgePill   = { 'cell-cns': 'CNS',     'cell-interaction': 'Risk',    'cell-same': 'Same'   };
+
+  let out = '';
+
+  // Edges
+  edges.forEach(e => {
+    const s = nodes[e.source], t = nodes[e.target];
+    const col   = edgeStroke[e.type] || '#b8c0d8';
+    const dash  = e.type === 'cell-same' ? ' stroke-dasharray="4 3"' : '';
+    out += `<line x1="${s.x.toFixed(1)}" y1="${s.y.toFixed(1)}" x2="${t.x.toFixed(1)}" y2="${t.y.toFixed(1)}" stroke="${col}" stroke-width="2" stroke-opacity="0.6"${dash}/>`;
+
+    // Edge label pill
+    const pill = edgePill[e.type];
+    if (pill) {
+      const mx = ((s.x + t.x)/2).toFixed(1), my = ((s.y + t.y)/2).toFixed(1);
+      out += `<rect x="${((s.x+t.x)/2-12).toFixed(1)}" y="${((s.y+t.y)/2-7).toFixed(1)}" width="24" height="13" rx="6" fill="${col}" fill-opacity="0.15" stroke="${col}" stroke-width="1" stroke-opacity="0.45"/>`;
+      out += `<text x="${mx}" y="${my}" text-anchor="middle" dominant-baseline="middle" font-size="7.5" font-family="'DM Mono',monospace" fill="${col}" font-weight="600">${pill}</text>`;
+    }
+  });
+
+  // Nodes
+  nodes.forEach((n, i) => {
+    const fill   = NODE_FILLS[i   % NODE_FILLS.length];
+    const stroke = NODE_STROKES[i % NODE_STROKES.length];
+    const label  = n.name.length > 8 ? n.name.slice(0, 7) + '…' : n.name;
+    out += `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="1.5" class="graph-node" style="animation-delay:${(i*50)}ms"/>`;
+    out += `<text x="${n.x.toFixed(1)}" y="${n.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="8.5" font-family="'DM Mono',monospace" fill="${stroke}" font-weight="600" pointer-events="none">${esc(label)}</text>`;
+  });
+
+  svg.innerHTML = out;
+}
+
+/* ── Print Button & Safety Card ──────────────────────────────────────────── */
+function showPrintBtn() { document.getElementById('print-btn-wrap').classList.remove('hidden'); }
+function hidePrintBtn() { document.getElementById('print-btn-wrap').classList.add('hidden'); }
+
+function printSummary() {
+  if (!_lastRisk || !_lastDrugData) return;
+  populatePrintCard(_lastRisk, _lastDrugData);
+  window.print();
+}
+
+function populatePrintCard(risk, drugData) {
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const pct   = v => (v * 100).toFixed(1) + '%';
+  const tierColor = { low: '#16a34a', med: '#c2720a', high: '#d63030', crit: '#b01c1c' };
+  const scoreColor = tierColor[risk.tierClass] || '#1b1e33';
+
+  const drugRows = drugData.map(({ drug, data }) => {
+    const dr = data?.totalEvents > 0 ? pct(data.deathEvents / data.totalEvents) : '—';
+    const hr = data?.totalEvents > 0 ? pct(data.hospEvents  / data.totalEvents) : '—';
+    return `<tr><td>${esc(drug.name)}</td><td>${esc(drug.fdaClass)}</td><td>${dr}</td><td>${hr}</td><td>${data?.recalls?.length > 0 ? 'Yes' : 'None'}</td></tr>`;
+  }).join('');
+
+  const interactions = [];
+  for (let i = 0; i < panel.length; i++) {
+    for (let j = i+1; j < panel.length; j++) {
+      const ov = overlapType(panel[i].fdaClass, panel[j].fdaClass);
+      if (ov.cls !== 'cell-none') interactions.push(`${panel[i].name} + ${panel[j].name}: ${ov.label}`);
+    }
+  }
+
+  const allReactions = {};
+  drugData.forEach(({ data }) => {
+    (data?.topReactions || []).forEach(r => {
+      const t = r.term?.toLowerCase() || '';
+      if (t) allReactions[t] = (allReactions[t] || 0) + (r.count || 0);
+    });
+  });
+  const topReactions = Object.entries(allReactions)
+    .sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t]) => capitalize(t));
+
+  const allRecalls = drugData.flatMap(({ drug, data }) =>
+    (data?.recalls || []).map(r =>
+      `${drug.name}: ${r.classification || 'Unknown'} — ${(r.product_description || '').slice(0, 90)}`)
+  );
+
+  const recallLabel = risk.recallScore === 15 ? 'Class I' : risk.recallScore === 8 ? 'Class II'
+                    : risk.recallScore ===  4 ? 'Class III' : 'None';
+  const overlapLabel = risk.overlapScore === 0 ? 'None' : risk.overlapScore < 8 ? 'Low'
+                     : risk.overlapScore < 16  ? 'Moderate' : 'High';
+
+  document.getElementById('print-card').innerHTML = `
+    <div class="pc-header">
+      <div class="pc-title">
+        <span class="pc-icon">⊕</span>
+        <div><h1>Medication Safety Card</h1><p>Drug Safety Explorer &middot; ${esc(today)}</p></div>
+      </div>
+      <div class="pc-score" style="color:${scoreColor}">
+        <span class="pc-score-num">${risk.score}</span>
+        <span class="pc-score-tier">${esc(risk.tier)}</span>
+      </div>
+    </div>
+
+    <section class="pc-section">
+      <h2>Medications</h2>
+      <table class="pc-table">
+        <thead><tr><th>Drug</th><th>Class</th><th>Fatal Rate</th><th>Hosp. Rate</th><th>Recall</th></tr></thead>
+        <tbody>${drugRows}</tbody>
+      </table>
+    </section>
+
+    <section class="pc-section pc-two-col">
+      <div>
+        <h2>Risk Factor Breakdown</h2>
+        <table class="pc-factor-table">
+          <tr><td>Fatal Outcomes</td><td>${risk.totalEvents > 0 ? pct(risk.deathRate) : 'No data'}</td><td>${risk.deathScore}/30</td></tr>
+          <tr><td>Hospitalization</td><td>${risk.totalEvents > 0 ? pct(risk.sevRate) : 'No data'}</td><td>${risk.hospScore}/30</td></tr>
+          <tr><td>Recall Status</td><td>${recallLabel}</td><td>${risk.recallScore}/15</td></tr>
+          <tr><td>Interactions</td><td>${overlapLabel}</td><td>${risk.overlapScore}/25</td></tr>
+          <tr style="font-weight:700"><td>Total Score</td><td>${esc(risk.tier)}</td><td>${risk.score}/100</td></tr>
+        </table>
+      </div>
+      <div>
+        <h2>Top Reported Adverse Reactions</h2>
+        <p class="pc-reactions">${topReactions.join(' &middot; ') || 'No data available'}</p>
+        ${interactions.length ? `<h2 style="margin-top:0.85rem">Interactions Detected</h2><ul class="pc-list">${interactions.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>` : ''}
+      </div>
+    </section>
+
+    ${allRecalls.length ? `<section class="pc-section"><h2>Recall Alerts</h2><ul class="pc-list">${allRecalls.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></section>` : ''}
+
+    <div class="pc-footer">
+      <strong>EDUCATIONAL USE ONLY.</strong> This card does not constitute medical advice.
+      Data sourced from the U.S. FDA OpenFDA API (open.fda.gov).
+      Always consult a licensed healthcare provider before making any decisions about medications.
+    </div>
+  `;
+}
+
 /* ── Disclaimer ───────────────────────────────────────────────────────────── */
 function checkDisclaimer() {
   if (!localStorage.getItem('dse_seen')) {
@@ -1039,6 +1337,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('analyze-btn').addEventListener('click', runAnalysis);
   document.getElementById('clear-all-btn').addEventListener('click', clearPanel);
+  document.getElementById('print-btn').addEventListener('click', printSummary);
 
   document.getElementById('dismiss-disclaimer').addEventListener('click', dismissDisclaimer);
   document.getElementById('disclaimer-modal').addEventListener('click', e => {

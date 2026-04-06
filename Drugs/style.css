@@ -351,12 +351,29 @@ main.three-panel {
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--accent);
-  margin-left: auto;
   background: var(--accent-soft);
   border: 1px solid rgba(72,128,245,0.2);
   padding: 0.1rem 0.5rem;
   border-radius: 10px;
+  white-space: nowrap;
 }
+.suggestion-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.preview-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.12rem 0.48rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.preview-safe        { background: rgba(22,163,74,0.10);  color: #15803d; border: 1px solid rgba(22,163,74,0.28); }
+.preview-interaction { background: rgba(194,114,10,0.10); color: #9a5800; border: 1px solid rgba(194,114,10,0.30); }
+.preview-cns         { background: rgba(214,48,48,0.10);  color: #b91c1c; border: 1px solid rgba(214,48,48,0.28); }
 .suggestion-loading, .suggestion-none {
   padding: 0.8rem 0.9rem;
   font-size: 0.8rem;
@@ -949,4 +966,99 @@ footer span { margin-right: 0.3rem; }
   header h1 { font-size: 0.95rem; }
   .btn-ghost span:not(.icon) { display: none; }
   .factor-cards { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Interaction Graph ────────────────────────────────────────────────────── */
+#graph-container {
+  padding: 0 1rem 0.6rem;
+}
+#interaction-graph {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+}
+.graph-node {
+  animation: graphNodeIn 0.4s ease both;
+}
+@keyframes graphNodeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.graph-legend {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding: 0 1rem 0.85rem;
+}
+.graph-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.67rem;
+  color: var(--text-muted);
+}
+
+/* ── Print Button ─────────────────────────────────────────────────────────── */
+#print-btn-wrap {
+  padding: 0.75rem 1rem 0;
+  display: flex;
+}
+.btn-print {
+  width: 100%;
+  justify-content: center;
+  font-size: 0.78rem;
+  gap: 0.4rem;
+}
+
+/* ── Print Card (hidden on screen) ───────────────────────────────────────── */
+#print-card { display: none; }
+
+/* ── @media print ─────────────────────────────────────────────────────────── */
+@media print {
+  body > *:not(#print-card) { display: none !important; }
+  #print-card {
+    display: block !important;
+    font-family: 'Sora', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 10pt;
+    color: #111;
+    padding: 0;
+    max-width: 100%;
+  }
+  .pc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #1b1e33;
+    padding-bottom: 10pt;
+    margin-bottom: 14pt;
+  }
+  .pc-title { display: flex; align-items: center; gap: 10pt; }
+  .pc-title h1 { font-size: 16pt; font-weight: 700; margin: 0; color: #111; }
+  .pc-title p  { font-size: 8pt; color: #666; margin: 2pt 0 0; }
+  .pc-icon { font-size: 22pt; color: #4880f5; }
+  .pc-score { text-align: right; }
+  .pc-score-num  { display: block; font-size: 30pt; font-weight: 700; line-height: 1; }
+  .pc-score-tier { display: block; font-size: 9pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2pt; }
+  .pc-section { margin-bottom: 14pt; }
+  .pc-section h2 {
+    font-size: 8pt; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    color: #555; border-bottom: 1px solid #ccc; padding-bottom: 3pt; margin-bottom: 6pt;
+  }
+  .pc-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18pt; }
+  .pc-table, .pc-factor-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  .pc-table th, .pc-table td, .pc-factor-table td { border: 1px solid #ddd; padding: 3pt 6pt; vertical-align: top; }
+  .pc-table th { background: #f2f4f8; font-weight: 700; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.05em; }
+  .pc-factor-table { font-size: 9pt; }
+  .pc-factor-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; color: #444; }
+  .pc-reactions { font-size: 9pt; color: #444; line-height: 1.75; }
+  .pc-list { padding-left: 13pt; margin: 0; }
+  .pc-list li { font-size: 8.5pt; color: #444; margin-bottom: 2pt; line-height: 1.5; }
+  .pc-footer {
+    margin-top: 14pt; border-top: 1px solid #ccc; padding-top: 8pt;
+    font-size: 7.5pt; color: #888; line-height: 1.55;
+  }
+  @page { margin: 0.75in; }
 }

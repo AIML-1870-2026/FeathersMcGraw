@@ -186,10 +186,18 @@
           <div id="recall-list"></div>
         </div>
 
-        <!-- Overlap matrix -->
-        <div id="matrix-section" class="hidden">
-          <div class="section-header">Drug Class Overlap Matrix</div>
-          <div id="class-matrix"></div>
+        <!-- Interaction graph -->
+        <div id="graph-section" class="hidden">
+          <div class="section-header">Interaction Network</div>
+          <div id="graph-container">
+            <svg id="interaction-graph" xmlns="http://www.w3.org/2000/svg" aria-label="Drug interaction network graph"></svg>
+          </div>
+          <div id="graph-legend" class="graph-legend"></div>
+        </div>
+
+        <!-- Print button -->
+        <div id="print-btn-wrap" class="hidden">
+          <button id="print-btn" class="btn-ghost btn-print">&#9113; Print / Save as PDF</button>
         </div>
 
         <!-- AE chart -->
@@ -214,6 +222,9 @@
     This tool does not constitute medical advice. Always consult a licensed healthcare provider.
     OpenFDA data is provided by the U.S. Food &amp; Drug Administration.
   </footer>
+
+  <!-- Print card (hidden on screen, shown in print) -->
+  <div id="print-card"></div>
 
   <script src="data/drug-classes.js"></script>
   <script src="app.js"></script>
