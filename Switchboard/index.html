@@ -28,7 +28,7 @@
         </div>
 
         <div class="field">
-          <label for="model-select">Model A</label>
+          <label for="model-select">Model</label>
           <select id="model-select">
             <option value="gpt-4o">gpt-4o</option>
             <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
@@ -42,15 +42,6 @@
             <input type="checkbox" id="toggle-compare" />
             <span class="track"></span>
           </label>
-        </div>
-
-        <div class="field" id="model-b-field" style="display:none">
-          <label for="model-b-select">Model B</label>
-          <select id="model-b-select">
-            <option value="gpt-4o">gpt-4o</option>
-            <option value="gpt-4o-mini">gpt-4o-mini</option>
-            <option value="gpt-3.5-turbo" selected>gpt-3.5-turbo</option>
-          </select>
         </div>
 
         <div class="field toggle-field">
@@ -109,6 +100,30 @@
     <!-- ── RIGHT COLUMN ── -->
     <section class="right-col">
 
+      <!-- Compare config strip (visible only in compare mode) -->
+      <div class="panel compare-config-strip" id="compare-config-strip" style="display:none">
+        <div class="panel-label">COMPARE — same prompt, two models</div>
+        <div class="compare-model-selectors">
+          <div class="compare-model-slot">
+            <label class="cmp-slot-label">Model A</label>
+            <select id="model-select-a">
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+              <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+            </select>
+          </div>
+          <span class="cmp-vs">vs</span>
+          <div class="compare-model-slot">
+            <label class="cmp-slot-label">Model B</label>
+            <select id="model-b-select">
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-3.5-turbo" selected>gpt-3.5-turbo</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <!-- Prompt -->
       <div class="panel" id="prompt-panel">
         <div class="panel-label">PROMPT</div>
@@ -154,7 +169,7 @@
         <div id="compare-view" style="display:none">
           <div class="compare-grid">
             <div class="compare-pane">
-              <div class="compare-model-label" id="cmp-label-a">model A</div>
+              <div class="compare-model-label" id="cmp-label-a">gpt-4o-mini</div>
               <pre id="cmp-output-a" class="response-pre"><span class="placeholder">— awaiting —</span></pre>
               <div class="status-bar" id="cmp-status-a">
                 <span id="cmp-tokens-a">tokens: —</span>
@@ -163,7 +178,7 @@
               </div>
             </div>
             <div class="compare-pane">
-              <div class="compare-model-label" id="cmp-label-b">model B</div>
+              <div class="compare-model-label" id="cmp-label-b">gpt-3.5-turbo</div>
               <pre id="cmp-output-b" class="response-pre"><span class="placeholder">— awaiting —</span></pre>
               <div class="status-bar" id="cmp-status-b">
                 <span id="cmp-tokens-b">tokens: —</span>

@@ -269,6 +269,30 @@ select { cursor: pointer; }
 .lib-btn:hover  { background: rgba(0,0,0,0.05); }
 .lib-btn.del-btn:hover { background: rgba(0,0,0,0.08); }
 
+/* ── Compare config strip ── */
+.compare-model-selectors {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.compare-model-slot {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 4px;
+}
+.cmp-slot-label {
+  font-size: 10px;
+  opacity: 0.55;
+  letter-spacing: 0.05em;
+}
+.cmp-vs {
+  font-size: 11px;
+  opacity: 0.3;
+  flex-shrink: 0;
+  padding-top: 16px;
+}
+
 /* ── Right column ── */
 .right-col { display: flex; flex-direction: column; }
 

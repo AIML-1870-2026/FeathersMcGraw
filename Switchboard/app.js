@@ -1,11 +1,12 @@
 'use strict';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-const apiKeyInput      = document.getElementById('api-key');
-const modelSelect      = document.getElementById('model-select');
-const modelBSelect     = document.getElementById('model-b-select');
-const modelBField      = document.getElementById('model-b-field');
-const toggleCompare    = document.getElementById('toggle-compare');
+const apiKeyInput         = document.getElementById('api-key');
+const modelSelect         = document.getElementById('model-select');      // left panel (single mode)
+const modelSelectA        = document.getElementById('model-select-a');   // compare strip model A
+const modelBSelect        = document.getElementById('model-b-select');   // compare strip model B
+const compareConfigStrip  = document.getElementById('compare-config-strip');
+const toggleCompare       = document.getElementById('toggle-compare');
 const toggleStructured = document.getElementById('toggle-structured');
 const schemaPanel      = document.getElementById('schema-panel');
 const promptTA         = document.getElementById('prompt-textarea');
@@ -141,15 +142,24 @@ let isLoading = false;
 // ── Compare mode toggle ───────────────────────────────────────────────────────
 toggleCompare.addEventListener('change', () => {
   const on = toggleCompare.checked;
-  modelBField.style.display = on ? '' : 'none';
   mainGrid.classList.toggle('compare-wide', on);
-  // update response view
-  if (!isLoading) {
-    singleView.style.display  = on ? 'none' : '';
-    compareView.style.display = on ? '' : 'none';
-    validatorPanel.style.display = 'none';
-  }
+  compareConfigStrip.style.display = on ? '' : 'none';
+  singleView.style.display         = on ? 'none' : '';
+  compareView.style.display        = on ? '' : 'none';
+  validatorPanel.style.display     = 'none';
+  if (on) syncCompareLabelA();
 });
+
+// Keep Model A label in compare pane in sync with the strip selector
+function syncCompareLabelA() {
+  cmpLabelA.textContent = modelSelectA.value;
+}
+function syncCompareLabelB() {
+  cmpLabelB.textContent = modelBSelect.value;
+}
+
+modelSelectA.addEventListener('change', syncCompareLabelA);
+modelBSelect.addEventListener('change', syncCompareLabelB);
 
 // ── Structured mode toggle ────────────────────────────────────────────────────
 toggleStructured.addEventListener('change', () => {
@@ -475,11 +485,12 @@ async function send() {
   keyWarn.classList.remove('visible');
 
   const prompt     = promptTA.value.trim();
-  const modelA     = modelSelect.value;
+  const compare    = toggleCompare.checked;
+  // In compare mode, model A comes from the strip selector; otherwise from the left panel
+  const modelA     = compare ? modelSelectA.value : modelSelect.value;
   const modelB     = modelBSelect.value;
   const structured = toggleStructured.checked;
   const schemaText = schemaTA.value.trim();
-  const compare    = toggleCompare.checked;
 
   isLoading = true;
   sendBtn.disabled = true;
