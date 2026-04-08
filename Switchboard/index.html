@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Switchboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <span class="header-title">LLM Switchboard</span>
+    <span class="header-sub">AIML 1870 · Quest 08</span>
+  </header>
+
+  <main class="grid">
+    <!-- LEFT COLUMN -->
+    <aside class="left-col">
+      <!-- Config Panel -->
+      <section class="panel" id="config-panel">
+        <div class="panel-label">CONFIG</div>
+
+        <div class="field">
+          <label for="api-key">API Key</label>
+          <input type="password" id="api-key" placeholder="sk-..." autocomplete="off" />
+          <span class="inline-warn" id="key-warn">key required</span>
+        </div>
+
+        <div class="field">
+          <label for="model-select">Model</label>
+          <select id="model-select">
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+          </select>
+        </div>
+
+        <div class="field toggle-field">
+          <label for="toggle-structured">Structured output</label>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-structured" />
+            <span class="track"></span>
+          </label>
+        </div>
+
+        <div class="field toggle-field">
+          <label for="toggle-stream">Stream response</label>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-stream" disabled />
+            <span class="track"></span>
+          </label>
+          <span class="soon">soon</span>
+        </div>
+      </section>
+
+      <!-- Example Prompts Panel -->
+      <section class="panel" id="examples-panel">
+        <div class="panel-label">EXAMPLES</div>
+        <button class="preset-btn" data-preset="summary">Summarize a news article</button>
+        <button class="preset-btn" data-preset="entities">Extract entities from text</button>
+        <button class="preset-btn" data-preset="sentiment">Classify sentiment</button>
+        <button class="preset-btn" data-preset="product">Generate product data</button>
+      </section>
+    </aside>
+
+    <!-- RIGHT COLUMN -->
+    <section class="right-col">
+      <!-- Prompt -->
+      <div class="panel" id="prompt-panel">
+        <div class="panel-label">PROMPT</div>
+        <textarea id="prompt-textarea" placeholder="Type or paste your prompt here…" rows="6"></textarea>
+      </div>
+
+      <!-- JSON Schema (structured mode only) -->
+      <div class="panel" id="schema-panel" style="display:none">
+        <div class="panel-label">JSON SCHEMA</div>
+        <textarea id="schema-textarea" class="schema-ta" rows="5" placeholder='{ "type": "object", "properties": { … } }'></textarea>
+      </div>
+
+      <!-- Send row -->
+      <div class="send-row">
+        <select id="schema-select">
+          <option value="">— schema template —</option>
+          <option value="entities">Entity extraction</option>
+          <option value="sentiment">Sentiment analysis</option>
+          <option value="product">Product catalog</option>
+          <option value="summary">News summary</option>
+        </select>
+        <button id="send-btn">SEND</button>
+      </div>
+
+      <!-- Response -->
+      <div class="panel" id="response-panel">
+        <div class="panel-label">RESPONSE</div>
+        <pre id="response-output" class="response-pre"><span class="placeholder">— awaiting response —</span></pre>
+        <div class="status-bar" id="status-bar">
+          <span id="stat-tokens">tokens: —</span>
+          <span id="stat-latency">latency: —</span>
+          <span id="stat-mode">mode: —</span>
+          <span id="stat-model">model: —</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
