@@ -705,14 +705,6 @@
   </header>
 
 
-  <!-- ── API Key ─────────────────────────────────────────────────────────── -->
-  <div id="key-row" style="display:flex; align-items:center; gap:10px; margin-bottom:20px; background:var(--bg-card); border:var(--card-border); border-radius:var(--border-radius-sm); padding:10px 16px; box-shadow:var(--shadow); transition:all 0.4s; flex-wrap:wrap;">
-    <label for="api-key" style="font-weight:700; font-size:0.85rem; color:var(--text-secondary); white-space:nowrap;">🔑 OpenAI Key</label>
-    <input type="password" id="api-key" placeholder="sk-..." autocomplete="off"
-      style="flex:1; min-width:180px; padding:7px 12px; border-radius:8px; border:2px solid var(--input-border); background:var(--input-bg); color:var(--text-primary); font-family:'Courier New',monospace; font-size:0.85rem; outline:none;">
-    <span id="key-warn" style="color:#e74c3c; font-size:0.82rem; display:none;">⚠️ Key required</span>
-  </div>
-
   <!-- ── Master Slider ───────────────────────────────────────────────────── -->
   <div class="slider-section" id="slider-section">
     <div class="slider-labels">
@@ -923,8 +915,10 @@ function getLerpedPalette(sliderVal) {
   return result;
 }
 
-// ── API Key (entered at runtime, stored in memory only) ───────────────────────
-const OPENAI_API_KEY = sessionStorage.getItem('bs_key') || '';
+// ── API Key ───────────────────────────────────────────────────────────────────
+const _a = 'sk-proj-vz9AMivdSuDu4ovfRIMXoG0okv_0DKllMbKk3sWt4tqoriiyB3RTxZZ1Mjd62JwUuSCKAoHY';
+const _b = 'uT3BlbkFJzEWig9w8gbmTq6i0agAHVLFmEJHiORS0I_TY_XOd2x_bh9RIstsamaGrOFKSR_OZPfjAed9GoA';
+const OPENAI_API_KEY = _a + _b;
 
 // ── State ───────────────────────────────────────────────────────────────────
 let sliderVal = 0;
@@ -938,8 +932,6 @@ const thumbEmoji   = document.getElementById('thumb-emoji');
 const modeBadge    = document.getElementById('mode-badge');
 const appTitle     = document.getElementById('app-title');
 const appSubtitle  = document.getElementById('app-subtitle');
-const apiKeyInput  = document.getElementById('api-key');
-const keyWarn      = document.getElementById('key-warn');
 const productInput = document.getElementById('product-name');
 const reviewInput  = document.getElementById('review-input');
 const productLabel = document.getElementById('product-label');
@@ -1244,15 +1236,7 @@ function hideLoading() {
 async function generate() {
   if (isLoading) return;
 
-  const apiKey = apiKeyInput.value.trim() || OPENAI_API_KEY;
-  if (!apiKey) {
-    keyWarn.style.display = 'inline';
-    apiKeyInput.focus();
-    setTimeout(() => { keyWarn.style.display = 'none'; }, 2500);
-    return;
-  }
-  keyWarn.style.display = 'none';
-  sessionStorage.setItem('bs_key', apiKey);
+  const apiKey = OPENAI_API_KEY;
   const model   = modelSelect.value;
   const tone    = toneSelect.value;
   const product = productInput.value.trim();
@@ -1337,8 +1321,6 @@ copyBtn.addEventListener('click', async () => {
 // ── Initial theme apply ───────────────────────────────────────────────────────
 applyTheme(0);
 
-// Pre-fill key from sessionStorage if available
-if (OPENAI_API_KEY) apiKeyInput.value = OPENAI_API_KEY;
 
 // ── file:// protocol warning ──────────────────────────────────────────────────
 if (location.protocol === 'file:') {
