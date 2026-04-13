@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brightside — Product Review Transformer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☀️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Baloo+2:wght@400;700&family=Cinzel:wght@400;700&family=Metal+Mania&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+  /* ─── CSS Variables (interpolated by JS) ─────────────────────────────── */
+  :root {
+    --bg-primary: #fff9f0;
+    --bg-secondary: #fff0fa;
+    --bg-card: #ffffff;
+    --text-primary: #2d1a4a;
+    --text-secondary: #7a5fa0;
+    --accent: #FFD700;
+    --accent2: #ff69b4;
+    --accent3: #7effa0;
+    --border-color: #ffd6f0;
+    --btn-bg: #ff69b4;
+    --btn-text: #fff;
+    --btn-hover: #ff4da6;
+    --slider-track: linear-gradient(90deg, #FFD700 0%, #ff69b4 25%, #aaa 50%, #c0392b 75%, #1a0000 100%);
+    --font-display: 'Fredoka One', cursive;
+    --font-body: 'Baloo 2', cursive;
+    --border-radius: 24px;
+    --border-radius-sm: 14px;
+    --glow-color: rgba(255, 215, 0, 0.5);
+    --shadow: 0 8px 32px rgba(255, 105, 180, 0.18);
+    --shadow-heavy: 0 16px 48px rgba(255, 105, 180, 0.35);
+    --card-border: 3px solid #ffd6f0;
+    --btn-shadow: 0 4px 16px rgba(255, 105, 180, 0.4);
+    --header-gradient: linear-gradient(135deg, #FFD700 0%, #ff69b4 50%, #7effa0 100%);
+    --input-bg: #fff0fa;
+    --input-border: #ffd6f0;
+    --mode-display: 'Brightside ☀️';
+    --particle-display: block;
+    --dark-display: none;
+    --slider-thumb-content: '☀️';
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    transition: background 0.4s, color 0.4s;
+    overflow-x: hidden;
+  }
+
+  /* ─── Floating particles (Brightside) ──────────────────────────────────── */
+  #particles {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .particle {
+    position: absolute;
+    font-size: 1.5rem;
+    animation: floatUp linear infinite;
+    opacity: 0.7;
+  }
+
+  @keyframes floatUp {
+    0% { transform: translateY(110vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.7; }
+    90% { opacity: 0.7; }
+    100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+  }
+
+  /* ─── Ember particles (Darkside) ──────────────────────────────────────── */
+  #embers {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+    display: none;
+  }
+
+  .ember {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #ff4400;
+    box-shadow: 0 0 6px #ff6600, 0 0 12px #ff2200;
+    animation: emberFloat linear infinite;
+  }
+
+  @keyframes emberFloat {
+    0% { transform: translateY(100vh) translateX(0) scale(1); opacity: 1; }
+    50% { transform: translateY(50vh) translateX(var(--dx, 30px)) scale(0.8); }
+    100% { transform: translateY(0) translateX(var(--dx2, -20px)) scale(0.2); opacity: 0; }
+  }
+
+  /* ─── Main wrapper ──────────────────────────────────────────────────────── */
+  .app-wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  /* ─── Header ────────────────────────────────────────────────────────────── */
+  .app-header {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+
+  .app-title {
+    font-family: var(--font-display);
+    font-size: clamp(2.8rem, 8vw, 5rem);
+    background: var(--header-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+    line-height: 1.1;
+    transition: all 0.4s;
+    filter: drop-shadow(0 2px 8px var(--glow-color));
+  }
+
+  .app-title.dark-title {
+    -webkit-text-fill-color: unset;
+    color: #ff3300;
+    background: none;
+    text-shadow: 0 0 20px #ff2200, 0 0 40px #ff6600, 0 2px 0 #000;
+    animation: flicker 2s infinite alternate;
+  }
+
+  @keyframes flicker {
+    0%, 95% { opacity: 1; }
+    96% { opacity: 0.85; }
+    97% { opacity: 1; }
+    98% { opacity: 0.7; }
+    100% { opacity: 1; }
+  }
+
+  .app-subtitle {
+    font-size: 1.1rem;
+    margin-top: 8px;
+    color: var(--text-secondary);
+    font-style: italic;
+    transition: color 0.4s;
+  }
+
+
+  /* ─── Slider Section ────────────────────────────────────────────────────── */
+  .slider-section {
+    background: var(--bg-card);
+    border: var(--card-border);
+    border-radius: var(--border-radius);
+    padding: 28px 28px 22px;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow-heavy);
+    transition: all 0.4s;
+  }
+
+  .slider-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .label-bright {
+    color: #ff69b4;
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.1rem;
+  }
+
+  .label-dark {
+    color: #c0392b;
+    font-family: 'Metal Mania', cursive;
+    font-size: 1.1rem;
+  }
+
+  .slider-track-wrap {
+    position: relative;
+    padding: 6px 0;
+  }
+
+  input[type=range]#master-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 18px;
+    border-radius: 9px;
+    background: var(--slider-track);
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  input[type=range]#master-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 4px solid var(--accent);
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.3s;
+    font-size: 22px;
+  }
+
+  input[type=range]#master-slider::-moz-range-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 4px solid var(--accent);
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    transition: border-color 0.3s;
+  }
+
+  .thumb-emoji {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 22px;
+    pointer-events: none;
+    transition: left 0.05s;
+    z-index: 2;
+  }
+
+  .mode-badge {
+    text-align: center;
+    margin-top: 16px;
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+    transition: all 0.3s;
+    min-height: 2rem;
+  }
+
+  /* ─── Input Section ─────────────────────────────────────────────────────── */
+  .input-section {
+    background: var(--bg-card);
+    border: var(--card-border);
+    border-radius: var(--border-radius);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+    transition: all 0.4s;
+  }
+
+  .input-section label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+  }
+
+  .input-section input[type=text],
+  .input-section textarea {
+    width: 100%;
+    border: 2px solid var(--input-border);
+    border-radius: var(--border-radius-sm);
+    padding: 12px 16px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.3s;
+  }
+
+  .input-section input[type=text]:focus,
+  .input-section textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow-color);
+  }
+
+  .input-section textarea {
+    resize: vertical;
+    min-height: 120px;
+  }
+
+  .input-gap { margin-top: 16px; }
+
+  /* ─── Controls Row ──────────────────────────────────────────────────────── */
+  .controls-section {
+    background: var(--bg-card);
+    border: var(--card-border);
+    border-radius: var(--border-radius);
+    padding: 22px 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+    transition: all 0.4s;
+  }
+
+  .controls-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    align-items: end;
+  }
+
+  .control-group label {
+    display: block;
+    font-weight: 700;
+    font-size: 0.88rem;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .control-group select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid var(--input-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.3s;
+  }
+
+  .control-group select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow-color);
+  }
+
+  .length-group {
+    display: flex;
+    gap: 8px;
+  }
+
+  .len-btn {
+    flex: 1;
+    padding: 10px 6px;
+    border: 2px solid var(--input-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--input-bg);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .len-btn.active, .len-btn:hover {
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border-color: var(--btn-bg);
+    box-shadow: var(--btn-shadow);
+    transform: translateY(-1px);
+  }
+
+  /* ─── Generate Button ───────────────────────────────────────────────────── */
+  .generate-section {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+
+  #generate-btn {
+    padding: 18px 48px;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    border: none;
+    border-radius: var(--border-radius);
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    cursor: pointer;
+    box-shadow: var(--btn-shadow);
+    transition: all 0.2s;
+    letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #generate-btn:hover {
+    background: var(--btn-hover);
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 8px 32px rgba(255, 105, 180, 0.5);
+  }
+
+  #generate-btn:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  #generate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  #generate-btn.dark-btn {
+    background: linear-gradient(135deg, #8b0000, #ff2200);
+    box-shadow: 0 4px 24px rgba(255, 34, 0, 0.5);
+    animation: btnPulse 2s infinite alternate;
+  }
+
+  @keyframes btnPulse {
+    0% { box-shadow: 0 4px 24px rgba(255, 34, 0, 0.5); }
+    100% { box-shadow: 0 4px 40px rgba(255, 100, 0, 0.8), 0 0 60px rgba(255, 0, 0, 0.3); }
+  }
+
+  #generate-btn.dark-btn:hover {
+    background: linear-gradient(135deg, #ff2200, #ff6600);
+  }
+
+  /* ─── Output Section ────────────────────────────────────────────────────── */
+  .output-section {
+    display: none;
+  }
+
+  .output-section.visible {
+    display: block;
+  }
+
+  .output-card {
+    background: var(--bg-card);
+    border: var(--card-border);
+    border-radius: var(--border-radius);
+    padding: 28px;
+    box-shadow: var(--shadow-heavy);
+    transition: all 0.4s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .output-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--header-gradient);
+    transition: all 0.4s;
+  }
+
+  .output-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    padding: 8px 20px;
+    border: 2px solid var(--accent);
+    border-radius: 50px;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .action-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    transform: translateY(-2px);
+  }
+
+  /* ─── Loading states ────────────────────────────────────────────────────── */
+  .loading-bright {
+    text-align: center;
+    padding: 40px;
+    display: none;
+  }
+
+  .loading-bright.active { display: block; }
+
+  .rainbow-spinner {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 6px solid transparent;
+    border-top-color: #FFD700;
+    border-right-color: #ff69b4;
+    border-bottom-color: #7effa0;
+    border-left-color: #87ceeb;
+    animation: rainbowSpin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+
+  @keyframes rainbowSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-bright p {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.3rem;
+    color: #ff69b4;
+    animation: bounce 0.6s ease infinite alternate;
+  }
+
+  @keyframes bounce {
+    to { transform: translateY(-6px); }
+  }
+
+  .loading-dark {
+    text-align: center;
+    padding: 40px;
+    display: none;
+  }
+
+  .loading-dark.active { display: block; }
+
+  .flame-loader {
+    font-size: 3rem;
+    display: inline-block;
+    animation: flamePulse 0.4s ease infinite alternate;
+    margin-bottom: 12px;
+  }
+
+  @keyframes flamePulse {
+    0% { transform: scaleY(1); filter: brightness(1); }
+    100% { transform: scaleY(1.2) scaleX(0.9); filter: brightness(1.5); }
+  }
+
+  .loading-dark p {
+    font-family: 'Metal Mania', cursive;
+    font-size: 1.2rem;
+    color: #ff4400;
+    animation: flicker 0.5s infinite alternate;
+  }
+
+  /* ─── Markdown output ───────────────────────────────────────────────────── */
+  #output-content {
+    line-height: 1.7;
+    font-size: 1rem;
+  }
+
+  #output-content h1, #output-content h2, #output-content h3 {
+    margin: 16px 0 8px;
+    color: var(--text-primary);
+    font-family: var(--font-display);
+  }
+
+  #output-content p { margin-bottom: 12px; }
+
+  #output-content ul, #output-content ol {
+    margin: 8px 0 12px 24px;
+  }
+
+  #output-content strong {
+    color: var(--accent2);
+  }
+
+  #output-content em { color: var(--text-secondary); }
+
+  #output-content blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 8px 16px;
+    margin: 12px 0;
+    background: var(--bg-secondary);
+    border-radius: 0 8px 8px 0;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+
+  /* ─── Error messages ────────────────────────────────────────────────────── */
+  .error-bright {
+    text-align: center;
+    padding: 24px;
+    background: #fff0f5;
+    border: 2px dashed #ff69b4;
+    border-radius: var(--border-radius-sm);
+    display: none;
+  }
+
+  .error-bright.visible { display: block; }
+  .error-bright p { color: #c2185b; font-style: italic; }
+
+  .error-dark {
+    text-align: center;
+    padding: 24px;
+    background: #1a0000;
+    border: 2px solid #ff2200;
+    border-radius: var(--border-radius-sm);
+    display: none;
+    box-shadow: 0 0 20px rgba(255, 34, 0, 0.3);
+  }
+
+  .error-dark.visible { display: block; }
+  .error-dark p { color: #ff4400; font-family: 'Metal Mania', cursive; }
+
+  /* ─── Rainbow border (Brightside card decoration) ───────────────────────── */
+  @keyframes rainbowBorder {
+    0% { border-color: #FFD700; }
+    20% { border-color: #ff69b4; }
+    40% { border-color: #7effa0; }
+    60% { border-color: #87ceeb; }
+    80% { border-color: #dda0dd; }
+    100% { border-color: #FFD700; }
+  }
+
+  .rainbow-card {
+    animation: rainbowBorder 3s linear infinite;
+    border-width: 3px;
+  }
+
+  /* ─── Hellfire card decoration ──────────────────────────────────────────── */
+  .hellfire-card {
+    border-color: #ff2200 !important;
+    box-shadow: 0 0 20px rgba(255, 34, 0, 0.4), 0 0 60px rgba(255, 100, 0, 0.2) !important;
+    animation: hellflicker 1.5s infinite alternate;
+  }
+
+  @keyframes hellflicker {
+    0% { box-shadow: 0 0 20px rgba(255, 34, 0, 0.4), 0 0 60px rgba(255, 100, 0, 0.2); }
+    100% { box-shadow: 0 0 30px rgba(255, 34, 0, 0.7), 0 0 80px rgba(255, 100, 0, 0.4); }
+  }
+
+  /* ─── Glitch text (Darkside) ────────────────────────────────────────────── */
+  .glitch {
+    position: relative;
+    animation: glitch 3s infinite;
+  }
+
+  @keyframes glitch {
+    0%, 90%, 100% { transform: none; }
+    91% { transform: translateX(-2px) skewX(2deg); }
+    92% { transform: translateX(2px) skewX(-2deg); }
+    93% { transform: translateX(0) skewX(0); }
+  }
+
+  /* ─── Responsive ────────────────────────────────────────────────────────── */
+  @media (max-width: 600px) {
+    .app-wrapper { padding: 20px 14px 60px; }
+    .controls-grid { grid-template-columns: 1fr; }
+    .slider-section { padding: 20px 16px 16px; }
+    #generate-btn { padding: 14px 32px; font-size: 1.2rem; }
+  }
+
+  /* ─── Neutral zone tweaks ───────────────────────────────────────────────── */
+  .neutral-body {
+    font-family: system-ui, sans-serif !important;
+  }
+
+  /* Copy feedback */
+  .copy-flash {
+    animation: copyFlash 0.3s ease;
+  }
+
+  @keyframes copyFlash {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); background: #27ae60; color: #fff; border-color: #27ae60; }
+    100% { transform: scale(1); }
+  }
+
+  /* Separator */
+  .section-sep {
+    height: 1px;
+    background: var(--border-color);
+    margin: 0 -28px 24px;
+    transition: background 0.4s;
+  }
+</style>
+</head>
+<body>
+
+<!-- Particles (Brightside) -->
+<div id="particles"></div>
+<!-- Embers (Darkside) -->
+<div id="embers"></div>
+
+<div class="app-wrapper">
+
+  <!-- ── File:// warning banner ─────────────────────────────────────────── -->
+  <div id="file-warn" style="display:none; background:#fff3cd; border:2px solid #ffc107; border-radius:10px; padding:14px 18px; margin-bottom:20px; color:#856404; font-size:0.95rem; line-height:1.5;">
+    ⚠️ <strong>You're opening this file directly (file://).</strong> Browsers block API calls from local files.<br>
+    Serve it with a local server instead:<br>
+    <code style="background:#f8f1d0; padding:2px 8px; border-radius:4px; font-size:0.88rem;">python3 -m http.server 8080</code> — then open <code style="background:#f8f1d0; padding:2px 8px; border-radius:4px; font-size:0.88rem;">http://localhost:8080</code>
+  </div>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="app-header">
+    <h1 class="app-title" id="app-title">Brightside ☀️</h1>
+    <p class="app-subtitle" id="app-subtitle">We find the silver lining in literally everything ✨</p>
+  </header>
+
+
+  <!-- ── API Key ─────────────────────────────────────────────────────────── -->
+  <div id="key-row" style="display:flex; align-items:center; gap:10px; margin-bottom:20px; background:var(--bg-card); border:var(--card-border); border-radius:var(--border-radius-sm); padding:10px 16px; box-shadow:var(--shadow); transition:all 0.4s; flex-wrap:wrap;">
+    <label for="api-key" style="font-weight:700; font-size:0.85rem; color:var(--text-secondary); white-space:nowrap;">🔑 OpenAI Key</label>
+    <input type="password" id="api-key" placeholder="sk-..." autocomplete="off"
+      style="flex:1; min-width:180px; padding:7px 12px; border-radius:8px; border:2px solid var(--input-border); background:var(--input-bg); color:var(--text-primary); font-family:'Courier New',monospace; font-size:0.85rem; outline:none;">
+    <span id="key-warn" style="color:#e74c3c; font-size:0.82rem; display:none;">⚠️ Key required</span>
+  </div>
+
+  <!-- ── Master Slider ───────────────────────────────────────────────────── -->
+  <div class="slider-section" id="slider-section">
+    <div class="slider-labels">
+      <span class="label-bright">☀️ Brightside</span>
+      <span class="label-dark">Darkside 🔥</span>
+    </div>
+    <div class="slider-track-wrap">
+      <input type="range" id="master-slider" min="0" max="100" value="0">
+      <span class="thumb-emoji" id="thumb-emoji">☀️</span>
+    </div>
+    <div class="mode-badge" id="mode-badge">Brightside ☀️</div>
+  </div>
+
+  <!-- ── Input Section ───────────────────────────────────────────────────── -->
+  <div class="input-section" id="input-section">
+    <label for="product-name" id="product-label">What wonderful product are we celebrating today? ✨</label>
+    <input type="text" id="product-name" placeholder="e.g. AirPods Pro, mystery novel, energy drink...">
+
+    <div class="input-gap">
+      <label for="review-input" id="review-label">Tell us anything — a feeling, a complaint, a half-formed thought. We'll make it beautiful.</label>
+      <textarea id="review-input" placeholder="Paste a glowing review, a furious rant, your raw feelings... anything goes."></textarea>
+    </div>
+  </div>
+
+  <!-- ── Controls ────────────────────────────────────────────────────────── -->
+  <div class="controls-section" id="controls-section">
+    <div class="controls-grid">
+      <div class="control-group">
+        <label>Model</label>
+        <select id="model-select">
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+          <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Tone</label>
+        <select id="tone-select">
+          <option value="Wholesome">Wholesome</option>
+          <option value="Enthusiastic">Enthusiastic</option>
+          <option value="Unhinged Happy">Unhinged Happy</option>
+          <option value="Corporate Cheerful">Corporate Cheerful</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Length</label>
+        <div class="length-group">
+          <button class="len-btn" data-len="Short">Short</button>
+          <button class="len-btn active" data-len="Medium">Medium</button>
+          <button class="len-btn" data-len="Long">Long</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Generate Button ─────────────────────────────────────────────────── -->
+  <div class="generate-section">
+    <button id="generate-btn">✨ Generate Review ✨</button>
+  </div>
+
+  <!-- ── Output ──────────────────────────────────────────────────────────── -->
+  <div class="output-section" id="output-section">
+    <div class="output-card" id="output-card">
+      <div class="section-sep"></div>
+      <div class="output-actions">
+        <button class="action-btn" id="copy-btn">📋 Copy</button>
+        <button class="action-btn" id="regen-btn">🔄 Regenerate</button>
+      </div>
+
+      <!-- Loading states -->
+      <div class="loading-bright" id="loading-bright">
+        <div class="rainbow-spinner"></div>
+        <p>Sprinkling magic dust... ✨🌈</p>
+      </div>
+
+      <div class="loading-dark" id="loading-dark">
+        <div class="flame-loader">🔥</div>
+        <p>SUMMONING THE DARKNESS...</p>
+      </div>
+
+      <!-- Error messages -->
+      <div class="error-bright" id="error-bright">
+        <p>😢 Oh no! Something went wrong and we're SO sorry! The API gently whispered: <strong id="err-bright-msg"></strong></p>
+        <p id="err-bright-hint" style="margin-top:8px; font-size:0.9rem;"></p>
+      </div>
+
+      <div class="error-dark" id="error-dark">
+        <p>💀 THE VOID REJECTED YOUR REQUEST.<br><em id="err-dark-msg"></em></p>
+        <p id="err-dark-hint" style="margin-top:8px; color:#888; font-family: sans-serif; font-size: 0.85rem;"></p>
+      </div>
+
+      <!-- Actual output -->
+      <div id="output-content"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const BRIGHT_EMOJIS = ['☀️','🌈','✨','🧚','🌸','🦋','🌟','💖','🍀','🎀'];
+const DARK_EMOJIS   = ['🔥','💀','😈','⛧','🖤','🩸','☠️','🌑','🕷️','🐍'];
+
+const MODES = [
+  { max: 10,  name: 'Brightside ☀️',    thumb: '☀️' },
+  { max: 30,  name: 'Looking Up 🌤️',    thumb: '🌤️' },
+  { max: 55,  name: 'Meh.',             thumb: '😐' },
+  { max: 70,  name: 'Cloudy 🌧️',        thumb: '🌧️' },
+  { max: 100, name: 'Darkside 🔥',      thumb: '🔥' },
+];
+
+const SUBTITLES = {
+  bright:  'We find the silver lining in literally everything ✨',
+  neutral: 'We generate product reviews.',
+  dark:    'We expose the truth. The horrible, horrible truth. 🔥',
+};
+
+const TONE_OPTIONS = {
+  bright:  ['Wholesome', 'Enthusiastic', 'Unhinged Happy', 'Corporate Cheerful'],
+  neutral: ['Balanced', 'Factual'],
+  dark:    ['Bitter', 'Furious', 'Passive-Aggressive', 'Dramatic'],
+};
+
+const LENGTH_WORDS = { Short: '~100 words', Medium: '~200 words', Long: '~350 words' };
+
+// ── Palette lerp ────────────────────────────────────────────────────────────
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+
+function rgbToHex([r,g,b]) {
+  return '#' + [r,g,b].map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
+}
+
+function lerpColor(a, b, t) {
+  const ra = hexToRgb(a), rb = hexToRgb(b);
+  return rgbToHex(ra.map((v, i) => v + (rb[i] - v) * t));
+}
+
+// Palette checkpoints at 0 (bright), 50 (neutral), 100 (dark)
+const PALETTE = {
+  '--bg-primary':       ['#fff9f0', '#f2f2f2', '#0d0000'],
+  '--bg-secondary':     ['#fff0fa', '#eeeeee', '#1a0000'],
+  '--bg-card':          ['#ffffff', '#f8f8f8', '#150000'],
+  '--text-primary':     ['#2d1a4a', '#333333', '#ff8866'],
+  '--text-secondary':   ['#7a5fa0', '#666666', '#cc4422'],
+  '--accent':           ['#FFD700', '#999999', '#ff2200'],
+  '--accent2':          ['#ff69b4', '#888888', '#ff4400'],
+  '--accent3':          ['#7effa0', '#bbbbbb', '#ff6600'],
+  '--border-color':     ['#ffd6f0', '#dddddd', '#550000'],
+  '--btn-bg':           ['#ff69b4', '#888888', '#8b0000'],
+  '--btn-hover':        ['#ff4da6', '#666666', '#cc0000'],
+  '--input-bg':         ['#fff0fa', '#f5f5f5', '#1a0000'],
+  '--input-border':     ['#ffd6f0', '#cccccc', '#550000'],
+  '--glow-color':       ['rgba(255,215,0,0.5)', 'rgba(150,150,150,0.1)', 'rgba(255,34,0,0.4)'],
+  '--shadow':           ['0 8px 32px rgba(255,105,180,0.18)', '0 4px 16px rgba(0,0,0,0.08)', '0 8px 32px rgba(200,0,0,0.3)'],
+  '--shadow-heavy':     ['0 16px 48px rgba(255,105,180,0.35)', '0 8px 24px rgba(0,0,0,0.12)', '0 16px 48px rgba(255,0,0,0.4)'],
+};
+
+// For non-color lerps we just pick nearest
+const FONT_MAP = (t) => {
+  if (t < 0.35) return "'Fredoka One', cursive";
+  if (t < 0.65) return "system-ui, sans-serif";
+  return "'Metal Mania', cursive";
+};
+
+const RADIUS_MAP = (t) => {
+  if (t < 0.35) return '24px';
+  if (t < 0.65) return '8px';
+  return '4px';
+};
+
+function lerpColorString(a, b, t) {
+  // If both are hex, lerp. Otherwise, just pick based on t
+  if (a.startsWith('#') && b.startsWith('#')) return lerpColor(a, b, t);
+  return t < 0.5 ? a : b;
+}
+
+function getLerpedPalette(sliderVal) {
+  // sliderVal: 0–100. 0=bright, 50=neutral, 100=dark
+  const result = {};
+  const t = sliderVal / 100; // 0–1
+
+  for (const [key, [bright, neutral, dark]] of Object.entries(PALETTE)) {
+    let val;
+    if (t <= 0.5) {
+      const tt = t * 2; // 0–1 within bright→neutral
+      if (bright.startsWith('#') && neutral.startsWith('#')) {
+        val = lerpColor(bright, neutral, tt);
+      } else {
+        val = tt < 0.5 ? bright : neutral;
+      }
+    } else {
+      const tt = (t - 0.5) * 2; // 0–1 within neutral→dark
+      if (neutral.startsWith('#') && dark.startsWith('#')) {
+        val = lerpColor(neutral, dark, tt);
+      } else {
+        val = tt < 0.5 ? neutral : dark;
+      }
+    }
+    result[key] = val || (t < 0.5 ? bright : dark);
+  }
+  return result;
+}
+
+// ── API Key (entered at runtime, stored in memory only) ───────────────────────
+const OPENAI_API_KEY = sessionStorage.getItem('bs_key') || '';
+
+// ── State ───────────────────────────────────────────────────────────────────
+let sliderVal = 0;
+let selectedLength = 'Medium';
+let isLoading = false;
+let lastPromptData = null;
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+const slider       = document.getElementById('master-slider');
+const thumbEmoji   = document.getElementById('thumb-emoji');
+const modeBadge    = document.getElementById('mode-badge');
+const appTitle     = document.getElementById('app-title');
+const appSubtitle  = document.getElementById('app-subtitle');
+const apiKeyInput  = document.getElementById('api-key');
+const keyWarn      = document.getElementById('key-warn');
+const productInput = document.getElementById('product-name');
+const reviewInput  = document.getElementById('review-input');
+const productLabel = document.getElementById('product-label');
+const reviewLabel  = document.getElementById('review-label');
+const modelSelect  = document.getElementById('model-select');
+const toneSelect   = document.getElementById('tone-select');
+const generateBtn  = document.getElementById('generate-btn');
+const outputSection= document.getElementById('output-section');
+const outputCard   = document.getElementById('output-card');
+const outputContent= document.getElementById('output-content');
+const loadingBright= document.getElementById('loading-bright');
+const loadingDark  = document.getElementById('loading-dark');
+const errorBright   = document.getElementById('error-bright');
+const errBrightMsg  = document.getElementById('err-bright-msg');
+const errBrightHint = document.getElementById('err-bright-hint');
+const errorDark     = document.getElementById('error-dark');
+const errDarkMsg    = document.getElementById('err-dark-msg');
+const errDarkHint   = document.getElementById('err-dark-hint');
+const copyBtn      = document.getElementById('copy-btn');
+const regenBtn     = document.getElementById('regen-btn');
+const particles    = document.getElementById('particles');
+const embers       = document.getElementById('embers');
+
+// ── Particles ────────────────────────────────────────────────────────────────
+function spawnParticles() {
+  particles.innerHTML = '';
+  for (let i = 0; i < 18; i++) {
+    const el = document.createElement('div');
+    el.className = 'particle';
+    el.textContent = BRIGHT_EMOJIS[Math.floor(Math.random() * BRIGHT_EMOJIS.length)];
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.animationDuration = (6 + Math.random() * 10) + 's';
+    el.style.animationDelay = (-Math.random() * 12) + 's';
+    el.style.fontSize = (1 + Math.random()) + 'rem';
+    particles.appendChild(el);
+  }
+}
+
+function spawnEmbers() {
+  embers.innerHTML = '';
+  for (let i = 0; i < 24; i++) {
+    const el = document.createElement('div');
+    el.className = 'ember';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.bottom = '0';
+    el.style.setProperty('--dx', (Math.random() * 80 - 40) + 'px');
+    el.style.setProperty('--dx2', (Math.random() * 60 - 30) + 'px');
+    el.style.animationDuration = (3 + Math.random() * 5) + 's';
+    el.style.animationDelay = (-Math.random() * 6) + 's';
+    const hue = 10 + Math.random() * 30;
+    el.style.background = `hsl(${hue}, 100%, 55%)`;
+    el.style.boxShadow = `0 0 6px hsl(${hue+10}, 100%, 65%), 0 0 12px hsl(${hue}, 100%, 45%)`;
+    embers.appendChild(el);
+  }
+}
+
+spawnParticles();
+spawnEmbers();
+
+// ── Apply theme ──────────────────────────────────────────────────────────────
+function getModeZone(v) {
+  if (v <= 15) return 'bright';
+  if (v >= 85) return 'dark';
+  return 'neutral';
+}
+
+function applyTheme(v) {
+  const t = v / 100;
+  const zone = getModeZone(v);
+
+  // Lerp palette
+  const palette = getLerpedPalette(v);
+  const root = document.documentElement;
+  for (const [key, val] of Object.entries(palette)) {
+    root.style.setProperty(key, val);
+  }
+
+  // Font + radius
+  root.style.setProperty('--font-display', FONT_MAP(t));
+  root.style.setProperty('--font-body', t < 0.35 ? "'Baloo 2', cursive" : t < 0.65 ? "system-ui, sans-serif" : "'Cinzel', serif");
+  root.style.setProperty('--border-radius', RADIUS_MAP(t));
+  root.style.setProperty('--border-radius-sm', t < 0.35 ? '14px' : t < 0.65 ? '6px' : '2px');
+
+  // Header gradient
+  if (zone === 'bright') {
+    root.style.setProperty('--header-gradient', 'linear-gradient(135deg, #FFD700 0%, #ff69b4 50%, #7effa0 100%)');
+    root.style.setProperty('--btn-shadow', '0 4px 16px rgba(255, 105, 180, 0.4)');
+    root.style.setProperty('--card-border', '3px solid #ffd6f0');
+  } else if (zone === 'neutral') {
+    root.style.setProperty('--header-gradient', 'linear-gradient(135deg, #aaa 0%, #888 100%)');
+    root.style.setProperty('--btn-shadow', '0 2px 8px rgba(0,0,0,0.15)');
+    root.style.setProperty('--card-border', '2px solid #dddddd');
+  } else {
+    root.style.setProperty('--header-gradient', 'linear-gradient(135deg, #8b0000 0%, #ff2200 50%, #ff6600 100%)');
+    root.style.setProperty('--btn-shadow', '0 4px 24px rgba(255, 34, 0, 0.5)');
+    root.style.setProperty('--card-border', '2px solid #550000');
+  }
+
+  // Title
+  if (zone === 'dark') {
+    appTitle.classList.add('dark-title', 'glitch');
+    appTitle.classList.remove('rainbow-title');
+    generateBtn.classList.add('dark-btn');
+    outputCard.classList.add('hellfire-card');
+    outputCard.classList.remove('rainbow-card');
+  } else if (zone === 'bright') {
+    appTitle.classList.remove('dark-title', 'glitch');
+    generateBtn.classList.remove('dark-btn');
+    outputCard.classList.add('rainbow-card');
+    outputCard.classList.remove('hellfire-card');
+  } else {
+    appTitle.classList.remove('dark-title', 'glitch');
+    generateBtn.classList.remove('dark-btn');
+    outputCard.classList.remove('rainbow-card', 'hellfire-card');
+  }
+
+  // Particles
+  if (zone === 'bright') {
+    const particleOpacity = Math.max(0, 1 - v / 15);
+    particles.style.opacity = particleOpacity;
+    particles.style.display = '';
+    embers.style.display = 'none';
+  } else if (zone === 'dark') {
+    const emberOpacity = Math.min(1, (v - 85) / 15);
+    embers.style.opacity = emberOpacity;
+    embers.style.display = '';
+    particles.style.display = 'none';
+  } else {
+    particles.style.display = 'none';
+    embers.style.display = 'none';
+  }
+
+  // Mode badge
+  let modeData = MODES[MODES.length - 1];
+  for (const m of MODES) { if (v <= m.max) { modeData = m; break; } }
+  modeBadge.textContent = modeData.name;
+
+  // Thumb emoji
+  thumbEmoji.textContent = modeData.thumb;
+  // Position thumb emoji over the slider thumb
+  const pct = v / 100;
+  const trackWidth = slider.offsetWidth;
+  const thumbWidth = 44;
+  const x = pct * (trackWidth - thumbWidth) + thumbWidth / 2 - 11;
+  thumbEmoji.style.left = x + 'px';
+
+  // App name and subtitle
+  let titleText, subtitleText;
+  if (v <= 10) {
+    titleText = 'Brightside ☀️';
+    subtitleText = SUBTITLES.bright;
+  } else if (v <= 30) {
+    titleText = 'Looking Up 🌤️';
+    subtitleText = 'We see the potential in everything. Maybe.';
+  } else if (v <= 55) {
+    titleText = 'Meh.';
+    subtitleText = SUBTITLES.neutral;
+  } else if (v <= 70) {
+    titleText = 'Cloudy 🌧️';
+    subtitleText = 'We have... concerns.';
+  } else {
+    titleText = 'Darkside 🔥';
+    subtitleText = SUBTITLES.dark;
+  }
+  appTitle.textContent = titleText;
+  appSubtitle.textContent = subtitleText;
+
+  // Input placeholders
+  if (zone === 'bright') {
+    productLabel.textContent = 'What wonderful product are we celebrating today? ✨';
+    reviewLabel.textContent = 'Tell us anything — a feeling, a complaint, a half-formed thought. We\'ll make it beautiful.';
+    productInput.placeholder = 'e.g. AirPods Pro, mystery novel, energy drink...';
+    reviewInput.placeholder = 'Paste a glowing review, a furious rant, your raw feelings... anything goes.';
+  } else if (zone === 'dark') {
+    productLabel.textContent = 'Name your victim. 💀';
+    reviewLabel.textContent = 'Paste your glowing review. We\'ll fix it. 🔥';
+    productInput.placeholder = 'Your prey. Name it.';
+    reviewInput.placeholder = 'Whatever lies they told you about this product. We\'ll set the record straight.';
+  } else {
+    productLabel.textContent = 'Product Name';
+    reviewLabel.textContent = 'Input (optional)';
+    productInput.placeholder = 'Product name';
+    reviewInput.placeholder = 'Paste any existing review or describe your experience.';
+  }
+
+  // Tone options
+  updateToneOptions(zone);
+
+  // Generate button text
+  if (zone === 'bright') {
+    generateBtn.textContent = '✨ Generate Review ✨';
+  } else if (zone === 'dark') {
+    generateBtn.textContent = '🔥 UNLEASH THE DARKNESS 🔥';
+  } else {
+    generateBtn.textContent = 'Generate Review';
+  }
+}
+
+function updateToneOptions(zone) {
+  const tones = TONE_OPTIONS[zone];
+  const current = toneSelect.value;
+  toneSelect.innerHTML = '';
+  tones.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    toneSelect.appendChild(opt);
+  });
+  if (tones.includes(current)) toneSelect.value = current;
+}
+
+// ── Slider events ────────────────────────────────────────────────────────────
+slider.addEventListener('input', () => {
+  sliderVal = parseInt(slider.value);
+  applyTheme(sliderVal);
+});
+
+window.addEventListener('resize', () => applyTheme(sliderVal));
+
+// ── Length buttons ───────────────────────────────────────────────────────────
+document.querySelectorAll('.len-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.len-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedLength = btn.dataset.len;
+  });
+});
+
+// ── Build system prompt ──────────────────────────────────────────────────────
+function buildSystemPrompt(v, tone, length, product) {
+  const lengthStr = LENGTH_WORDS[length] || '~200 words';
+  const prodStr = product.trim() || 'the product';
+
+  if (v <= 30) {
+    // Brightside
+    return `You are Brightside, an AI that transforms anything into a radiant, glowing product review. No matter what the user gives you — a complaint, a rant, raw feelings, an existing review — you find the silver lining and write a review that is ${tone}. You are irrationally, enthusiastically positive. The product name is: ${prodStr}. Write a ${lengthStr} review. Render your response in markdown with headers, stars (⭐), and enthusiastic language.`;
+  } else if (v >= 70) {
+    // Darkside
+    return `You are Darkside, an AI that transforms anything into a scathing, devastating product review. No matter what the user gives you — praise, excitement, or raw feelings — you find every flaw and write a review that is ${tone}. You are mercilessly, dramatically negative. The product name is: ${prodStr}. Write a ${lengthStr} review. Render your response in markdown. Use dark humor. Do not hold back.`;
+  } else {
+    // Blend — lean based on position
+    const t = (v - 30) / 40; // 0 (30) → 1 (70)
+    if (t < 0.5) {
+      // Slightly brightside, acknowledge slight imperfections
+      return `You are a balanced but optimistic reviewer. Write a review that is mostly positive with a balanced tone of ${tone}. Acknowledge slight imperfections but focus on the bright side. The product name is: ${prodStr}. Write a ${lengthStr} review in markdown. Tone: ${tone}.`;
+    } else {
+      // Slightly darkside, lean negative with one grudging compliment
+      return `You are a critical, pessimistic reviewer. Write a review that is mostly negative with a tone of ${tone}. Include one grudging compliment but overall be critical and unflattering. The product name is: ${prodStr}. Write a ${lengthStr} review in markdown. Tone: ${tone}.`;
+    }
+  }
+}
+
+// ── OpenAI API call ──────────────────────────────────────────────────────────
+async function callOpenAI(apiKey, model, systemPrompt, userContent) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent || 'Please write the review.' }
+      ]
+    })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    const msg = errData?.error?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  const content = data?.choices?.[0]?.message?.content ?? '';
+  return content;
+}
+
+// ── Show/hide loading ─────────────────────────────────────────────────────────
+function showLoading() {
+  const zone = getModeZone(sliderVal);
+  outputContent.innerHTML = '';
+  errorBright.classList.remove('visible');
+  errorDark.classList.remove('visible');
+
+  if (zone === 'dark') {
+    loadingBright.classList.remove('active');
+    loadingDark.classList.add('active');
+  } else {
+    loadingDark.classList.remove('active');
+    loadingBright.classList.add('active');
+  }
+}
+
+function hideLoading() {
+  loadingBright.classList.remove('active');
+  loadingDark.classList.remove('active');
+}
+
+// ── Generate ──────────────────────────────────────────────────────────────────
+async function generate() {
+  if (isLoading) return;
+
+  const apiKey = apiKeyInput.value.trim() || OPENAI_API_KEY;
+  if (!apiKey) {
+    keyWarn.style.display = 'inline';
+    apiKeyInput.focus();
+    setTimeout(() => { keyWarn.style.display = 'none'; }, 2500);
+    return;
+  }
+  keyWarn.style.display = 'none';
+  sessionStorage.setItem('bs_key', apiKey);
+  const model   = modelSelect.value;
+  const tone    = toneSelect.value;
+  const product = productInput.value.trim();
+  const review  = reviewInput.value.trim();
+  const zone    = getModeZone(sliderVal);
+
+  const systemPrompt = buildSystemPrompt(sliderVal, tone, selectedLength, product);
+  const userContent  = review || (product ? `Please write a review for ${product}.` : 'Write a review.');
+
+  lastPromptData = { apiKey, model, systemPrompt, userContent };
+
+  isLoading = true;
+  generateBtn.disabled = true;
+  outputSection.classList.add('visible');
+  showLoading();
+
+  try {
+    const content = await callOpenAI(apiKey, model, systemPrompt, userContent);
+    hideLoading();
+    errorBright.classList.remove('visible');
+    errorDark.classList.remove('visible');
+    outputContent.innerHTML = marked.parse(content);
+    outputContent._rawText = content;
+  } catch (err) {
+    hideLoading();
+    const msg = err.message || 'Network error';
+    const isFileFetch = msg.toLowerCase().includes('failed to fetch');
+    const isFileProtocol = location.protocol === 'file:';
+    let hint = '';
+    if (isFileFetch && isFileProtocol) {
+      hint = 'You\'re opening this file directly. Run: python3 -m http.server 8080 then visit http://localhost:8080';
+    } else if (isFileFetch) {
+      hint = 'CORS/network error — this usually means the API key is invalid, expired, or over quota. Check your OpenAI dashboard at platform.openai.com/api-keys';
+    } else if (msg.includes('401')) {
+      hint = 'Invalid API key. Check platform.openai.com/api-keys';
+    } else if (msg.includes('429')) {
+      hint = 'Rate limit or quota exceeded. Check platform.openai.com/usage';
+    }
+    if (zone === 'dark') {
+      errDarkMsg.textContent = `"${msg}" — even the void finds this disappointing.`;
+      errDarkHint.textContent = hint;
+      errorDark.classList.add('visible');
+    } else {
+      errBrightMsg.textContent = msg;
+      errBrightHint.textContent = hint || 'Please try again! We believe in you! 🌸';
+      errorBright.classList.add('visible');
+    }
+  }
+
+  isLoading = false;
+  generateBtn.disabled = false;
+}
+
+generateBtn.addEventListener('click', generate);
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') generate();
+});
+
+regenBtn.addEventListener('click', () => {
+  if (!isLoading && lastPromptData) generate();
+});
+
+// ── Copy to clipboard ─────────────────────────────────────────────────────────
+copyBtn.addEventListener('click', async () => {
+  const raw = outputContent._rawText;
+  if (!raw) return;
+  try {
+    await navigator.clipboard.writeText(raw);
+    copyBtn.classList.add('copy-flash');
+    const prev = copyBtn.textContent;
+    copyBtn.textContent = '✅ Copied!';
+    setTimeout(() => {
+      copyBtn.textContent = prev;
+      copyBtn.classList.remove('copy-flash');
+    }, 1500);
+  } catch {
+    copyBtn.textContent = '❌ Failed';
+    setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 1500);
+  }
+});
+
+// ── Initial theme apply ───────────────────────────────────────────────────────
+applyTheme(0);
+
+// Pre-fill key from sessionStorage if available
+if (OPENAI_API_KEY) apiKeyInput.value = OPENAI_API_KEY;
+
+// ── file:// protocol warning ──────────────────────────────────────────────────
+if (location.protocol === 'file:') {
+  document.getElementById('file-warn').style.display = '';
+}
+</script>
+</body>
+</html>
