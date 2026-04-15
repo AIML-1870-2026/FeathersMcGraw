@@ -1,7 +1,9 @@
 'use strict';
 
+// ── API key (in-memory only, never persisted) ─────────────────────────────────
+let apiKey = '';
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-const apiKeyInput         = document.getElementById('api-key');
 const modelSelect         = document.getElementById('model-select');      // left panel (single mode)
 const modelSelectA        = document.getElementById('model-select-a');   // compare strip model A
 const modelBSelect        = document.getElementById('model-b-select');   // compare strip model B
@@ -13,7 +15,6 @@ const promptTA         = document.getElementById('prompt-textarea');
 const schemaTA         = document.getElementById('schema-textarea');
 const schemaSelect     = document.getElementById('schema-select');
 const sendBtn          = document.getElementById('send-btn');
-const keyWarn          = document.getElementById('key-warn');
 const mainGrid         = document.getElementById('main-grid');
 
 // Single view
@@ -57,6 +58,42 @@ const metModels    = document.getElementById('met-models');
 const libNameInput = document.getElementById('lib-name-input');
 const libSaveBtn   = document.getElementById('lib-save-btn');
 const libList      = document.getElementById('lib-list');
+
+// ── Key loading ───────────────────────────────────────────────────────────────
+const keyFileInput = document.getElementById('key-file-input');
+const apiKeyInput  = document.getElementById('api-key-input');
+const keyStatus    = document.getElementById('key-status');
+const keyWarn      = document.getElementById('key-warn');
+
+function extractKey(text) {
+  const envMatch = text.match(/OPENAI_API_KEY\s*=\s*["']?([^\s"'\r\n]+)["']?/i);
+  if (envMatch) return envMatch[1];
+  const skMatch = text.match(/\bsk-[A-Za-z0-9_-]+/);
+  return skMatch ? skMatch[0] : null;
+}
+function setKeyStatus(type, msg) {
+  keyStatus.textContent = msg;
+  keyStatus.className = 'key-status' + (type ? ' ' + type : '');
+}
+
+keyFileInput.addEventListener('change', () => {
+  const file = keyFileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const found = extractKey(e.target.result);
+    if (found) { apiKey = found; apiKeyInput.value = ''; setKeyStatus('ok', '✓ Key loaded'); }
+    else        { setKeyStatus('err', '✗ No key found'); }
+    keyFileInput.value = '';
+  };
+  reader.readAsText(file);
+});
+
+apiKeyInput.addEventListener('input', () => {
+  const val = apiKeyInput.value.trim();
+  apiKey = val;
+  setKeyStatus(val ? 'ok' : '', val ? '✓ Key ready' : '');
+});
 
 // ── Schema templates ──────────────────────────────────────────────────────────
 const SCHEMAS = {
@@ -475,14 +512,11 @@ document.addEventListener('keydown', e => {
 async function send() {
   if (isLoading) return;
 
-  const apiKey = apiKeyInput.value.trim();
   if (!apiKey) {
     keyWarn.classList.add('visible');
-    apiKeyInput.focus();
     setTimeout(() => keyWarn.classList.remove('visible'), 2500);
     return;
   }
-  keyWarn.classList.remove('visible');
 
   const prompt     = promptTA.value.trim();
   const compare    = toggleCompare.checked;

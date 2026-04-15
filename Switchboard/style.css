@@ -175,6 +175,25 @@ select { cursor: pointer; }
   margin-left: 6px;
 }
 
+/* ── Key field ── */
+.file-upload-btn {
+  display: inline-block;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--ink);
+  opacity: 0.7;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+.file-upload-btn:hover { opacity: 1; border-color: var(--accent); }
+.key-status { font-size: 10px; margin-top: 3px; min-height: 1em; opacity: 0.8; }
+.key-status.ok  { color: #4caf50; opacity: 1; }
+.key-status.err { color: #f44336; opacity: 1; }
+
 /* ── Inline warning ── */
 .inline-warn {
   font-size: 10px;

@@ -274,6 +274,52 @@
     font-size: 0.95rem;
   }
 
+  /* ── API key row ── */
+  .key-field { margin-bottom: 20px; }
+  .key-label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+  }
+  .key-row { display: flex; align-items: center; gap: 8px; }
+  .key-row input[type="password"] {
+    flex: 1;
+    border: 2px solid var(--input-border);
+    border-radius: var(--border-radius-sm);
+    padding: 10px 14px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .key-row input[type="password"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow-color);
+  }
+  .key-row input[type="file"] { display: none; }
+  .file-upload-btn {
+    padding: 10px 14px;
+    background: var(--input-bg);
+    border: 2px solid var(--input-border);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.2s, color 0.2s;
+    user-select: none;
+  }
+  .file-upload-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .key-or { color: var(--text-secondary); font-size: 0.85rem; flex-shrink: 0; }
+  .key-status { margin-top: 6px; font-size: 0.85rem; min-height: 1.1em; }
+  .key-status.ok  { color: #4caf50; }
+  .key-status.err { color: #f44336; }
+
   .input-section input[type=text],
   .input-section textarea {
     width: 100%;
@@ -720,8 +766,16 @@
 
   <!-- ── Input Section ───────────────────────────────────────────────────── -->
   <div class="input-section" id="input-section">
-    <label for="api-key-input">OpenAI API Key</label>
-    <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off">
+    <div class="key-field">
+      <label class="key-label">OpenAI API Key</label>
+      <div class="key-row">
+        <label class="file-upload-btn" for="key-file-input">📂 Upload .env</label>
+        <input type="file" id="key-file-input" accept=".env,.csv,text/plain,.txt">
+        <span class="key-or">or</span>
+        <input type="password" id="api-key-input" placeholder="Paste key manually…" autocomplete="off">
+      </div>
+      <div class="key-status" id="key-status"></div>
+    </div>
 
     <label for="product-name" id="product-label">What wonderful product are we celebrating today? ✨</label>
     <input type="text" id="product-name" placeholder="e.g. AirPods Pro, mystery novel, energy drink...">
@@ -918,8 +972,42 @@ function getLerpedPalette(sliderVal) {
   return result;
 }
 
-// ── API Key ───────────────────────────────────────────────────────────────────
-const apiKeyInput = document.getElementById('api-key-input');
+// ── API Key (in-memory only, never persisted) ─────────────────────────────────
+let apiKey = '';
+
+(function initKeyLoader() {
+  const keyFileInput = document.getElementById('key-file-input');
+  const apiKeyInput  = document.getElementById('api-key-input');
+  const keyStatus    = document.getElementById('key-status');
+
+  function extractKey(text) {
+    const envMatch = text.match(/OPENAI_API_KEY\s*=\s*["']?([^\s"'\r\n]+)["']?/i);
+    if (envMatch) return envMatch[1];
+    const skMatch = text.match(/\bsk-[A-Za-z0-9_-]+/);
+    return skMatch ? skMatch[0] : null;
+  }
+  function setKeyStatus(type, msg) {
+    keyStatus.textContent = msg;
+    keyStatus.className = 'key-status' + (type ? ' ' + type : '');
+  }
+  keyFileInput.addEventListener('change', () => {
+    const file = keyFileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const found = extractKey(e.target.result);
+      if (found) { apiKey = found; apiKeyInput.value = ''; setKeyStatus('ok', '✓ Key loaded from file'); }
+      else        { setKeyStatus('err', '✗ No OpenAI key found in file'); }
+      keyFileInput.value = '';
+    };
+    reader.readAsText(file);
+  });
+  apiKeyInput.addEventListener('input', () => {
+    const val = apiKeyInput.value.trim();
+    apiKey = val;
+    setKeyStatus(val ? 'ok' : '', val ? '✓ Key ready' : '');
+  });
+})();
 
 // ── State ───────────────────────────────────────────────────────────────────
 let sliderVal = 0;
@@ -1237,15 +1325,12 @@ function hideLoading() {
 async function generate() {
   if (isLoading) return;
 
-  const apiKey = apiKeyInput.value.trim();
   if (!apiKey) {
     errBrightMsg.textContent  = 'API key required.';
-    errBrightHint.textContent = 'Paste your OpenAI API key in the field above.';
+    errBrightHint.textContent = 'Upload your .env file or paste your key above.';
     errorBright.classList.add('visible');
-    apiKeyInput.focus();
     return;
   }
-
   const model   = modelSelect.value;
   const tone    = toneSelect.value;
   const product = productInput.value.trim();

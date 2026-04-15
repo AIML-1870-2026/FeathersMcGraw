@@ -266,6 +266,43 @@
     cursor: default;
   }
 
+  /* ── API key row ────────────────────────────────────────────────────────── */
+  .key-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .key-row input[type="password"] { flex: 1; }
+  .key-row input[type="file"]     { display: none; }
+  .file-upload-btn {
+    padding: 9px 14px;
+    background: #f0f4f8;
+    border: 1.5px solid #ccd4e0;
+    border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    color: var(--ink-mid);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
+    user-select: none;
+  }
+  .file-upload-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .key-or {
+    font-family: 'Caveat', cursive;
+    font-size: 1rem;
+    color: var(--ink-faint);
+    flex-shrink: 0;
+  }
+  .key-status {
+    margin-top: 6px;
+    font-family: 'Caveat', cursive;
+    font-size: 1rem;
+    min-height: 1.2em;
+  }
+  .key-status.ok  { color: #2e7d32; }
+  .key-status.err { color: var(--red-margin); }
+
   /* ── Input error ────────────────────────────────────────────────────────── */
   .input-error {
     font-family: 'Caveat', cursive;
@@ -605,11 +642,17 @@
 
   <div class="input-panel">
 
-    <!-- API Key -->
+    <!-- API Key (file upload or manual paste, in-memory only) -->
     <div class="field-group">
-      <label class="field-label" for="api-key-input">OpenAI API Key:</label>
+      <label class="field-label">OpenAI API Key:</label>
       <div class="field-rule"></div>
-      <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off">
+      <div class="key-row">
+        <label class="file-upload-btn" for="key-file-input">📂 Upload .env</label>
+        <input type="file" id="key-file-input" accept=".env,.csv,text/plain,.txt">
+        <span class="key-or">or</span>
+        <input type="password" id="api-key-input" placeholder="Paste key manually…" autocomplete="off">
+      </div>
+      <div class="key-status" id="key-status"></div>
     </div>
 
     <!-- Grade Level -->
@@ -742,7 +785,9 @@ PRESET_SUPPLIES.forEach(cat =>
 );
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
+const keyFileInput   = document.getElementById('key-file-input');
 const apiKeyInput    = document.getElementById('api-key-input');
+const keyStatus      = document.getElementById('key-status');
 const gradeSelect    = document.getElementById('grade-select');
 const supplyInput    = document.getElementById('supply-input');
 const addBtn         = document.getElementById('add-btn');
@@ -765,6 +810,9 @@ const histList       = document.getElementById('history-list');
 const clearHistBtn   = document.getElementById('clear-hist-btn');
 const presetToggle   = document.getElementById('preset-toggle');
 const presetPanelEl  = document.getElementById('preset-panel');
+
+// ── API key (in-memory only, never persisted) ─────────────────────────────────
+let apiKey = '';
 
 // ── App state ─────────────────────────────────────────────────────────────────
 const supplies = [];
@@ -804,6 +852,43 @@ function showOutputPanel() {
   outputPanel.offsetHeight; // force reflow
   outputPanel.classList.add('visible');
 }
+
+// ── Key loading (file upload or manual paste) ─────────────────────────────────
+function extractKey(text) {
+  const envMatch = text.match(/OPENAI_API_KEY\s*=\s*["']?([^\s"'\r\n]+)["']?/i);
+  if (envMatch) return envMatch[1];
+  const skMatch = text.match(/\bsk-[A-Za-z0-9_-]+/);
+  return skMatch ? skMatch[0] : null;
+}
+
+function setKeyStatus(type, msg) {
+  keyStatus.textContent = msg;
+  keyStatus.className = 'key-status' + (type ? ' ' + type : '');
+}
+
+keyFileInput.addEventListener('change', () => {
+  const file = keyFileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const found = extractKey(e.target.result);
+    if (found) {
+      apiKey = found;
+      apiKeyInput.value = '';
+      setKeyStatus('ok', '✓ Key loaded from file');
+    } else {
+      setKeyStatus('err', '✗ No OpenAI key found in file');
+    }
+    keyFileInput.value = '';
+  };
+  reader.readAsText(file);
+});
+
+apiKeyInput.addEventListener('input', () => {
+  const val = apiKeyInput.value.trim();
+  apiKey = val;
+  setKeyStatus(val ? 'ok' : '', val ? '✓ Key ready' : '');
+});
 
 // ── Preset panel ──────────────────────────────────────────────────────────────
 function buildPresetPanel() {
@@ -957,10 +1042,8 @@ async function generate() {
   if (isLoading) return;
   clearInputError();
 
-  const apiKey = apiKeyInput.value.trim();
   if (!apiKey) {
-    showInputError('Paste your OpenAI API key above to get started.');
-    apiKeyInput.focus();
+    showInputError('Load your OpenAI API key above first.');
     return;
   }
   if (supplies.length === 0) {
@@ -981,7 +1064,7 @@ async function generate() {
   showOutputPanel();
 
   try {
-    const raw = await callOpenAI(apiKey, [
+    const raw = await callOpenAI(OPENAI_KEY, [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content:
           `Grade Level: ${grade}\n` +
@@ -1012,16 +1095,14 @@ async function generate() {
 
 // ── Supply substitutions ──────────────────────────────────────────────────────
 subBtn.addEventListener('click', async () => {
-  if (!currentMarkdown) return;
-  const apiKey = apiKeyInput.value.trim();
-  if (!apiKey) { showInputError('API key required.'); return; }
+  if (!currentMarkdown || !apiKey) return;
 
   subPanel.classList.add('show');
   subLoading.classList.add('show');
   subBody.textContent = '';
 
   try {
-    const result = await callOpenAI(apiKey, [
+    const result = await callOpenAI(OPENAI_KEY, [
       { role: 'system', content: 'You are a helpful science teacher.' },
       { role: 'user', content:
           `This experiment uses: ${supplies.join(', ')}.\n\n` +
