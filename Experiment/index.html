@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Science Experiment Generator</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+  /* ── Reset ──────────────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Variables ──────────────────────────────────────────────────────────── */
+  :root {
+    --ink:          #1a1a2e;
+    --ink-mid:      #3d3d5c;
+    --ink-faint:    #8888aa;
+    --red-margin:   #c0392b;
+    --paper:        #fafaf7;
+    --grid-line:    rgba(120, 160, 210, 0.28);
+    --rule-line:    rgba(120, 160, 210, 0.40);
+    --chip-bg:      #fffbe6;
+    --chip-border:  #e6c840;
+    --chip-text:    #6b4f00;
+    --shadow:       0 2px 16px rgba(0, 0, 0, 0.09), 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+
+  /* ── Graph paper body ───────────────────────────────────────────────────── */
+  body {
+    min-height: 100vh;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 15px;
+    background-color: #eef2f7;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 48px 16px 96px;
+  }
+
+  /* ── Notebook card ──────────────────────────────────────────────────────── */
+  .card {
+    width: 100%;
+    max-width: 720px;
+    background: var(--paper);
+    border-radius: 5px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  /* Red top margin line */
+  .top-rule {
+    height: 4px;
+    background: var(--red-margin);
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────────────── */
+  .app-header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 28px 36px 22px;
+    border-bottom: 1.5px solid var(--rule-line);
+  }
+
+  .flask-icon { flex-shrink: 0; }
+
+  .app-header h1 {
+    font-family: 'Caveat', cursive;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+
+  .subtitle {
+    font-family: 'Caveat', cursive;
+    font-size: 1.15rem;
+    color: var(--ink-mid);
+    margin-top: 2px;
+  }
+
+  /* ── Input panel ────────────────────────────────────────────────────────── */
+  .input-panel {
+    padding: 28px 36px 30px;
+  }
+
+  .field-group {
+    margin-bottom: 26px;
+  }
+
+  .field-label {
+    display: block;
+    font-family: 'Caveat', cursive;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 3px;
+  }
+
+  .field-rule {
+    width: 100px;
+    height: 1.5px;
+    background: var(--ink);
+    opacity: 0.2;
+    margin-bottom: 10px;
+  }
+
+  select,
+  input[type="text"] {
+    width: 100%;
+    padding: 9px 13px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.93rem;
+    color: var(--ink);
+    background: #fff;
+    border: 1.5px solid #ccd4e0;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.18s, box-shadow 0.18s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  /* Custom chevron for select */
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%231a1a2e' opacity='.5' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    padding-right: 34px;
+  }
+
+  select:focus,
+  input:focus {
+    border-color: #5b82c4;
+    box-shadow: 0 0 0 3px rgba(91, 130, 196, 0.14);
+  }
+
+  /* ── Chip input ─────────────────────────────────────────────────────────── */
+  .chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 9px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--chip-bg);
+    border: 1.5px solid var(--chip-border);
+    border-radius: 999px;
+    padding: 4px 8px 4px 13px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    color: var(--chip-text);
+    box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.06);
+    animation: chipPop 0.14s ease-out;
+  }
+
+  @keyframes chipPop {
+    from { transform: scale(0.75); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+
+  .chip-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #a07820;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
+    border-radius: 50%;
+    transition: color 0.14s, background 0.14s;
+  }
+
+  .chip-remove:hover {
+    color: var(--red-margin);
+    background: rgba(192, 57, 43, 0.08);
+  }
+
+  .chip-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .chip-row input { flex: 1; }
+
+  .add-btn {
+    padding: 9px 18px;
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+
+  .add-btn:hover { background: #2c2c4a; }
+
+  /* ── Inline input error ─────────────────────────────────────────────────── */
+  .input-error {
+    font-family: 'Caveat', cursive;
+    font-size: 1.1rem;
+    color: var(--red-margin);
+    margin-top: -10px;
+    margin-bottom: 14px;
+    min-height: 0;
+    display: none;
+  }
+  .input-error.show { display: block; }
+
+  /* ── Generate button ────────────────────────────────────────────────────── */
+  #generate-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+    transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+  }
+
+  #generate-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.22);
+  }
+
+  #generate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ── Output panel ───────────────────────────────────────────────────────── */
+  .output-panel {
+    padding: 0 36px 36px;
+    display: none;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  .output-panel.show {
+    display: block;
+  }
+
+  .output-panel.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Lined paper area */
+  .output-area {
+    border-left: 3px solid var(--red-margin);
+    border-radius: 0 3px 3px 0;
+    padding: 24px 22px 24px 26px;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        transparent        0px,
+        transparent        31px,
+        var(--rule-line)   31px,
+        var(--rule-line)   32px
+      );
+    background-position: 0 24px;
+    box-shadow: inset 3px 0 10px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+    line-height: 32px;
+  }
+
+  /* ── Loading dots ───────────────────────────────────────────────────────── */
+  .loading-dots {
+    display: none;
+    gap: 6px;
+    align-items: center;
+    padding: 4px 0;
+  }
+  .loading-dots.show { display: flex; }
+
+  .loading-dots span {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ink-mid);
+    animation: dotBounce 1.1s ease-in-out infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.18s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.36s; }
+
+  @keyframes dotBounce {
+    0%, 80%, 100% { transform: scale(0.7); opacity: 0.3; }
+    40%           { transform: scale(1.1); opacity: 1;   }
+  }
+
+  /* ── Output error ───────────────────────────────────────────────────────── */
+  .output-error {
+    display: none;
+    font-family: 'Caveat', cursive;
+    font-size: 1.15rem;
+    color: var(--red-margin);
+    line-height: 32px;
+  }
+  .output-error.show { display: block; }
+
+  /* ── Markdown output ────────────────────────────────────────────────────── */
+  #output-content {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.93rem;
+    color: var(--ink);
+    line-height: 32px;
+  }
+
+  #output-content h2 {
+    font-family: 'Caveat', cursive;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 32px;
+    margin-top: 16px;
+  }
+  #output-content h2:first-child { margin-top: 0; }
+
+  #output-content p  { line-height: 32px; margin: 0; }
+  #output-content ul,
+  #output-content ol { padding-left: 22px; margin: 0; }
+  #output-content li { line-height: 32px; }
+  #output-content strong { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="top-rule"></div>
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header class="app-header">
+    <svg class="flask-icon" xmlns="http://www.w3.org/2000/svg"
+         width="46" height="46" viewBox="0 0 24 24"
+         fill="none" stroke="#1a1a2e" stroke-width="1.6"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 3h6"/>
+      <path d="M9 3v5.5L4.5 16.5A2 2 0 006.3 19.5h11.4a2 2 0 001.8-3L15 8.5V3"/>
+      <path d="M6.9 15h10.2"/>
+    </svg>
+    <div>
+      <h1>Science Experiment Generator</h1>
+      <p class="subtitle">Enter your grade level and supplies. Let's do science.</p>
+    </div>
+  </header>
+
+  <!-- ── Input panel ─────────────────────────────────────────────────────── -->
+  <div class="input-panel">
+
+    <!-- API Key -->
+    <div class="field-group">
+      <label class="field-label" for="api-key-input">OpenAI API Key:</label>
+      <div class="field-rule"></div>
+      <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off">
+    </div>
+
+    <!-- Grade Level -->
+    <div class="field-group">
+      <label class="field-label" for="grade-select">Grade Level:</label>
+      <div class="field-rule"></div>
+      <select id="grade-select">
+        <option value="K–2">K–2 (Kindergarten–2nd Grade)</option>
+        <option value="3–5">3–5 (3rd–5th Grade)</option>
+        <option value="6–8">6–8 (6th–8th Grade)</option>
+        <option value="9–12">9–12 (9th–12th Grade)</option>
+      </select>
+    </div>
+
+    <!-- Supplies chip input -->
+    <div class="field-group">
+      <label class="field-label">Available Supplies:</label>
+      <div class="field-rule"></div>
+      <div id="chips-container" class="chips-container"></div>
+      <div class="chip-row">
+        <input type="text" id="supply-input" placeholder="Type a supply and press Enter...">
+        <button class="add-btn" id="add-btn">Add</button>
+      </div>
+    </div>
+
+    <div id="input-error" class="input-error"></div>
+
+    <button id="generate-btn">Run Experiment →</button>
+  </div>
+
+  <!-- ── Output panel ────────────────────────────────────────────────────── -->
+  <div id="output-panel" class="output-panel">
+    <div class="output-area">
+      <div id="loading-dots" class="loading-dots">
+        <span></span><span></span><span></span>
+      </div>
+      <div id="output-error" class="output-error"></div>
+      <div id="output-content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const gradeSelect    = document.getElementById('grade-select');
+const supplyInput    = document.getElementById('supply-input');
+const addBtn         = document.getElementById('add-btn');
+const chipsContainer = document.getElementById('chips-container');
+const inputError     = document.getElementById('input-error');
+const generateBtn    = document.getElementById('generate-btn');
+const outputPanel    = document.getElementById('output-panel');
+const loadingDots    = document.getElementById('loading-dots');
+const outputError    = document.getElementById('output-error');
+const outputContent  = document.getElementById('output-content');
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const supplies = [];
+let isLoading  = false;
+
+// ── API key ───────────────────────────────────────────────────────────────────
+const apiKeyInput = document.getElementById('api-key-input');
+
+// ── Chip input ────────────────────────────────────────────────────────────────
+function addSupply() {
+  const raw = supplyInput.value.trim();
+  if (!raw) return;
+  if (supplies.map(s => s.toLowerCase()).includes(raw.toLowerCase())) {
+    supplyInput.value = '';
+    return;
+  }
+  supplies.push(raw);
+  renderChips();
+  supplyInput.value = '';
+  supplyInput.focus();
+}
+
+function removeSupply(i) {
+  supplies.splice(i, 1);
+  renderChips();
+}
+
+function renderChips() {
+  chipsContainer.innerHTML = supplies.map((s, i) => `
+    <span class="chip">
+      ${escapeHtml(s)}
+      <button class="chip-remove" onclick="removeSupply(${i})" title="Remove">×</button>
+    </span>
+  `).join('');
+}
+
+supplyInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addSupply(); }
+});
+addBtn.addEventListener('click', addSupply);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function showInputError(msg) {
+  inputError.textContent = '✗ ' + msg;
+  inputError.classList.add('show');
+}
+function clearInputError() {
+  inputError.classList.remove('show');
+}
+
+function setLoading(on) {
+  loadingDots.classList.toggle('show', on);
+}
+
+function setOutputError(msg) {
+  outputError.textContent = '✗ ' + msg;
+  outputError.classList.add('show');
+  setLoading(false);
+}
+function clearOutputError() {
+  outputError.classList.remove('show');
+}
+
+function showOutputPanel() {
+  outputPanel.classList.add('show');
+  // Force reflow, then add `visible` to trigger transition
+  outputPanel.offsetHeight; // eslint-disable-line no-unused-expressions
+  outputPanel.classList.add('visible');
+}
+
+// ── System prompt ─────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT =
+`You are a science education assistant helping K-12 students and teachers. Generate safe, hands-on science experiments using only the supplies provided.
+
+Always format your response in markdown with these exact sections:
+## Experiment Title
+## The Big Idea
+(One sentence: what scientific concept does this explore?)
+## What You'll Need
+(Only use supplies from the provided list)
+## Instructions
+(Numbered steps, clear and age-appropriate)
+## What's Actually Happening
+(The science behind it — explained for the grade level)
+## Think About It
+(2–3 discussion questions appropriate for the grade level)
+
+Keep it safe. Keep it fun. Match the complexity to the grade level.`;
+
+// ── API call ──────────────────────────────────────────────────────────────────
+async function callOpenAI(apiKey, grade, suppliesList) {
+  const userMessage =
+    `Grade Level: ${grade}\n` +
+    `Available Supplies: ${suppliesList.join(', ')}\n\n` +
+    `Generate a science experiment.`;
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model:       'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user',   content: userMessage   }
+      ],
+      max_tokens:  1000,
+      temperature: 0.8,
+      stream:      false
+    })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || `HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content ?? '';
+}
+
+// ── Generate ──────────────────────────────────────────────────────────────────
+generateBtn.addEventListener('click', generate);
+
+async function generate() {
+  if (isLoading) return;
+
+  clearInputError();
+
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    showInputError('Paste your OpenAI API key above to get started.');
+    apiKeyInput.focus();
+    return;
+  }
+
+  if (supplies.length === 0) {
+    showInputError('Add at least one supply to get started.');
+    supplyInput.focus();
+    return;
+  }
+
+  const grade = gradeSelect.value;
+
+  isLoading = true;
+  generateBtn.disabled    = true;
+  generateBtn.textContent = 'Generating...';
+
+  clearOutputError();
+  outputContent.innerHTML = '';
+  setLoading(true);
+  showOutputPanel();
+
+  try {
+    const markdown = await callOpenAI(apiKey, grade, [...supplies]);
+    setLoading(false);
+    outputContent.innerHTML = marked.parse(markdown);
+  } catch (err) {
+    setOutputError(err.message || 'Network error — check your connection.');
+  }
+
+  isLoading = false;
+  generateBtn.disabled    = false;
+  generateBtn.textContent = 'Run Experiment →';
+}
+</script>
+</body>
+</html>
