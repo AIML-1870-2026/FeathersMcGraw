@@ -720,6 +720,9 @@
 
   <!-- ── Input Section ───────────────────────────────────────────────────── -->
   <div class="input-section" id="input-section">
+    <label for="api-key-input">OpenAI API Key</label>
+    <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off">
+
     <label for="product-name" id="product-label">What wonderful product are we celebrating today? ✨</label>
     <input type="text" id="product-name" placeholder="e.g. AirPods Pro, mystery novel, energy drink...">
 
@@ -916,9 +919,7 @@ function getLerpedPalette(sliderVal) {
 }
 
 // ── API Key ───────────────────────────────────────────────────────────────────
-const _a = 'sk-proj-vz9AMivdSuDu4ovfRIMXoG0okv_0DKllMbKk3sWt4tqoriiyB3RTxZZ1Mjd62JwUuSCKAoHY';
-const _b = 'uT3BlbkFJzEWig9w8gbmTq6i0agAHVLFmEJHiORS0I_TY_XOd2x_bh9RIstsamaGrOFKSR_OZPfjAed9GoA';
-const OPENAI_API_KEY = _a + _b;
+const apiKeyInput = document.getElementById('api-key-input');
 
 // ── State ───────────────────────────────────────────────────────────────────
 let sliderVal = 0;
@@ -1236,7 +1237,15 @@ function hideLoading() {
 async function generate() {
   if (isLoading) return;
 
-  const apiKey = OPENAI_API_KEY;
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    errBrightMsg.textContent  = 'API key required.';
+    errBrightHint.textContent = 'Paste your OpenAI API key in the field above.';
+    errorBright.classList.add('visible');
+    apiKeyInput.focus();
+    return;
+  }
+
   const model   = modelSelect.value;
   const tone    = toneSelect.value;
   const product = productInput.value.trim();
