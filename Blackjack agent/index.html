@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blackjack Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ─── Header ─────────────────────────────────── -->
+<header class="header">
+  <span class="brand">Blackjack Agent</span>
+  <div class="header-controls">
+    <select id="model-select" class="model-select">
+      <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+      <option value="gpt-4o">gpt-4o</option>
+      <option value="gpt-4-turbo">gpt-4-turbo</option>
+      <option value="o1-mini">o1-mini</option>
+    </select>
+    <div class="env-group">
+      <label for="env-file" class="env-label">Upload .env</label>
+      <input type="file" id="env-file" class="env-input" accept=".env,text/plain,.txt">
+      <input type="password" id="key-paste" class="key-paste" placeholder="or paste key…" autocomplete="off" spellcheck="false">
+      <span id="key-status" class="key-status"></span>
+    </div>
+    <div class="balance-display">
+      <span class="balance-label">Balance</span>
+      <span id="balance-amount" class="balance-amount">$1,000</span>
+    </div>
+  </div>
+</header>
+
+<!-- ─── Three-panel layout ─────────────────────── -->
+<main class="layout">
+
+  <!-- Left: Analytics -->
+  <aside class="panel panel-left">
+    <div class="panel-title">Analytics</div>
+
+    <div class="chart-wrap">
+      <div class="chart-sublabel">Bankroll</div>
+      <canvas id="bankroll-chart"></canvas>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-cell">
+        <span class="stat-label">Hands</span>
+        <span class="stat-val" id="stat-hands">0</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-label">Win Rate</span>
+        <span class="stat-val" id="stat-winrate">—</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-label">Streak</span>
+        <span class="stat-val" id="stat-streak">—</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-label">Best Win</span>
+        <span class="stat-val" id="stat-best-win">—</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-label">Worst Loss</span>
+        <span class="stat-val" id="stat-worst-loss">—</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-label">AI Accuracy</span>
+        <span class="stat-val" id="stat-ai-accuracy">—</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Center: Game -->
+  <section class="panel panel-center">
+    <!-- Dealer -->
+    <div class="hand-area">
+      <div class="area-header">
+        <span class="area-label">Dealer</span>
+        <span class="hand-total" id="dealer-total"></span>
+      </div>
+      <div class="cards-row" id="dealer-cards"></div>
+    </div>
+
+    <div class="divider-h"></div>
+
+    <!-- Player -->
+    <div class="hand-area">
+      <div class="area-header">
+        <span class="area-label">Player</span>
+        <span class="hand-total" id="player-total"></span>
+      </div>
+      <div class="cards-row" id="player-cards"></div>
+    </div>
+
+    <div class="divider-h"></div>
+
+    <!-- Controls -->
+    <div class="game-controls">
+      <div class="bet-row">
+        <span class="bet-label">Bet</span>
+        <input type="number" id="bet-input" class="bet-input" min="1" max="10000" value="50" placeholder="50">
+        <button id="deal-btn" class="btn btn-primary">Deal</button>
+      </div>
+      <div id="bet-err" class="inline-err"></div>
+      <div class="action-row">
+        <button id="hit-btn"     class="btn btn-secondary" disabled>Hit</button>
+        <button id="stand-btn"   class="btn btn-secondary" disabled>Stand</button>
+        <button id="ai-rec-btn"  class="btn btn-accent"    disabled>Get AI Rec</button>
+        <button id="execute-btn" class="btn btn-execute"   disabled>Execute</button>
+      </div>
+    </div>
+
+    <!-- Outcome message -->
+    <div id="game-msg" class="game-msg"></div>
+
+    <!-- AI Analysis -->
+    <div class="ai-panel">
+      <div class="ai-panel-title">AI Analysis</div>
+      <div id="ai-content" class="ai-content">
+        <span class="ai-placeholder">Upload your OpenAI key and deal a hand to begin.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Right: Strategy -->
+  <aside class="panel panel-right">
+    <div class="panel-title">Strategy</div>
+
+    <div class="matrix-wrap" id="matrix-wrap"></div>
+
+    <div class="legend-row">
+      <span class="legend-pill hit">H Hit</span>
+      <span class="legend-pill stand">S Stand</span>
+      <span class="legend-pill double">D Double</span>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">Detail Level</div>
+      <div class="radio-group">
+        <label class="radio-opt">
+          <input type="radio" name="explain" value="brief"> Brief
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="explain" value="standard" checked> Standard
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="explain" value="deep"> Deep
+        </label>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">Risk Tolerance</div>
+      <input type="range" id="risk-slider" class="risk-slider" min="0" max="2" step="1" value="1">
+      <div id="risk-label" class="risk-label">Balanced</div>
+      <div id="risk-desc"  class="risk-desc">AI uses standard basic strategy.</div>
+    </div>
+  </aside>
+
+</main>
+
+<script src="game.js"></script>
+<script src="strategy.js"></script>
+<script src="analytics.js"></script>
+<script src="agent.js"></script>
+<script>
+// ─── DOM refs ────────────────────────────────────
+const balanceEl    = document.getElementById('balance-amount');
+const dealerCards  = document.getElementById('dealer-cards');
+const playerCards  = document.getElementById('player-cards');
+const dealerTotal  = document.getElementById('dealer-total');
+const playerTotal  = document.getElementById('player-total');
+const betInput     = document.getElementById('bet-input');
+const betErr       = document.getElementById('bet-err');
+const dealBtn      = document.getElementById('deal-btn');
+const hitBtn       = document.getElementById('hit-btn');
+const standBtn     = document.getElementById('stand-btn');
+const aiRecBtn     = document.getElementById('ai-rec-btn');
+const executeBtn   = document.getElementById('execute-btn');
+const gameMsgEl    = document.getElementById('game-msg');
+const aiContentEl  = document.getElementById('ai-content');
+const modelSelect  = document.getElementById('model-select');
+const riskSlider   = document.getElementById('risk-slider');
+const riskLabel    = document.getElementById('risk-label');
+const riskDesc     = document.getElementById('risk-desc');
+const keyStatus    = document.getElementById('key-status');
+const envFile      = document.getElementById('env-file');
+const keyPaste     = document.getElementById('key-paste');
+
+// ─── Hand state ──────────────────────────────────
+let pendingAction  = null;  // action for Execute button
+let lastAiRec      = null;  // last AI recommendation (for analytics)
+let lastAiBsAction = null;  // basic strategy at time of AI call
+let lastAiResponse = null;  // full response (for re-render on level change)
+let loadingTimer   = null;
+
+// ─── Manual key paste ────────────────────────────
+keyPaste.addEventListener('input', () => {
+  const val = keyPaste.value.trim();
+  if (val) {
+    setApiKey(val);
+    keyStatus.textContent = '✓ Key ready';
+    keyStatus.className   = 'key-status ok';
+  } else {
+    setApiKey('');
+    keyStatus.textContent = '';
+    keyStatus.className   = 'key-status';
+  }
+});
+
+// ─── Risk slider ─────────────────────────────────
+const RISK_LABELS = ['Conservative', 'Balanced', 'Aggressive'];
+const RISK_DESCS  = [
+  'AI biases toward standing and avoiding busts.',
+  'AI uses standard basic strategy.',
+  'AI is more willing to hit on borderline totals.',
+];
+
+riskSlider.addEventListener('input', () => {
+  const v = parseInt(riskSlider.value);
+  riskLabel.textContent = RISK_LABELS[v];
+  riskDesc.textContent  = RISK_DESCS[v];
+});
+
+// ─── .env upload (pattern from Switchboard) ──────
+envFile.addEventListener('change', () => {
+  const file = envFile.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    const envMatch = text.match(/OPENAI_API_KEY\s*=\s*["']?([^\s"'\r\n]+)["']?/i);
+    const skMatch  = text.match(/\bsk-[A-Za-z0-9_\-]+/);
+    const key = envMatch ? envMatch[1] : (skMatch ? skMatch[0] : null);
+    if (key) {
+      setApiKey(key);
+      keyStatus.textContent  = '✓ Key loaded';
+      keyStatus.className    = 'key-status ok';
+    } else {
+      keyStatus.textContent  = '✗ No key found';
+      keyStatus.className    = 'key-status err';
+    }
+    envFile.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// ─── Card rendering ───────────────────────────────
+function renderCard(card) {
+  if (card.faceDown) {
+    return `<div class="card card-back"><div class="card-back-inner"></div></div>`;
+  }
+  const red = card.suit === '♥' || card.suit === '♦';
+  return `<div class="card${red ? ' red' : ''}">
+    <div class="card-corner">
+      <div class="card-rank">${card.rank}</div>
+      <div class="card-suit-sm">${card.suit}</div>
+    </div>
+    <div class="card-suit-mid">${card.suit}</div>
+    <div class="card-corner btm">
+      <div class="card-rank">${card.rank}</div>
+      <div class="card-suit-sm">${card.suit}</div>
+    </div>
+  </div>`;
+}
+
+function renderHands() {
+  playerCards.innerHTML = game.playerHand.map(renderCard).join('');
+  dealerCards.innerHTML = game.dealerHand.map(renderCard).join('');
+
+  const pi = getHandInfo(game.playerHand);
+  playerTotal.textContent  = game.playerHand.length
+    ? `${pi.total}${pi.isSoft ? ' soft' : ''}` : '';
+  if (pi.total > 21) playerTotal.classList.add('bust');
+  else playerTotal.classList.remove('bust');
+
+  const visDealer = game.dealerHand.filter(c => !c.faceDown);
+  if (visDealer.length) {
+    const di = getHandInfo(game.dealerHand);
+    const hasFaceDown = game.dealerHand.some(c => c.faceDown);
+    dealerTotal.textContent = hasFaceDown ? '?' : String(di.total);
+  } else {
+    dealerTotal.textContent = '';
+  }
+}
+
+function updateBalance() {
+  balanceEl.textContent = `$${game.balance.toLocaleString()}`;
+}
+
+function setActionBtns(enabled) {
+  hitBtn.disabled    = !enabled;
+  standBtn.disabled  = !enabled;
+  aiRecBtn.disabled  = !enabled;
+}
+
+function showMsg(text, cls = '') {
+  gameMsgEl.textContent = text;
+  gameMsgEl.className   = `game-msg${cls ? ' ' + cls : ''}`;
+}
+
+function updateMatrixHighlight() {
+  const pi = getHandInfo(game.playerHand);
+  const up = game.dealerHand[0];
+  highlightMatrixCell(pi.total, pi.isSoft, up.rank);
+}
+
+// ─── AI content rendering ─────────────────────────
+function renderAiContent(resp) {
+  if (!resp) return;
+  const level = document.querySelector('input[name="explain"]:checked').value;
+
+  const badge  = `<span class="action-badge ${resp.action}">${resp.action.toUpperCase()}</span>`;
+  const confEl = level === 'deep'
+    ? `<span class="conf-label">Confidence: ${Math.round(resp.confidence * 100)}%</span>` : '';
+
+  let body;
+  if (level === 'brief') {
+    body = `<p class="ai-reason">${esc(resp.brief_reason)}</p>`;
+  } else if (level === 'standard') {
+    body = `<p class="ai-reason">${esc(resp.full_analysis)}</p>`;
+  } else {
+    const bsAgree = resp.basic_strategy_agrees
+      ? `<span class="meta-pill agree">Basic strategy agrees</span>`
+      : `<span class="meta-pill disagree">Basic strategy disagrees</span>`;
+    body = `<p class="ai-reason">${esc(resp.full_analysis)}</p>
+      <div class="ai-meta">${bsAgree}</div>`;
+  }
+
+  aiContentEl.innerHTML = `
+    <div class="ai-rec">
+      <div class="ai-action-row">${badge}${confEl}</div>
+      ${body}
+    </div>`;
+}
+
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Deal ─────────────────────────────────────────
+dealBtn.addEventListener('click', () => {
+  const bet = parseInt(betInput.value);
+  betErr.textContent = '';
+
+  if (!bet || bet <= 0) { betErr.textContent = 'Enter a valid bet amount.'; return; }
+  if (bet > game.balance) {
+    betErr.textContent = `Bet cannot exceed balance ($${game.balance.toLocaleString()}).`;
+    return;
+  }
+
+  // Reset hand state
+  clearInterval(loadingTimer);
+  pendingAction  = null;
+  lastAiRec      = null;
+  lastAiBsAction = null;
+  lastAiResponse = null;
+  clearMatrixHighlight();
+  showMsg('');
+  aiContentEl.innerHTML = '<span class="ai-placeholder">Click "Get AI Rec" for a recommendation.</span>';
+
+  if (!game.startHand(bet)) return;
+
+  renderHands();
+  updateBalance();
+
+  // Instant blackjack check
+  if (game.isBlackjack(game.playerHand)) {
+    game.revealDealer();
+    game.state = 'HAND_DONE';
+    renderHands();
+    finishHand(game.resolveHand());
+    return;
+  }
+
+  dealBtn.disabled = true;
+  setActionBtns(true);
+  executeBtn.disabled = true;
+  updateMatrixHighlight();
+});
+
+// ─── Hit ──────────────────────────────────────────
+hitBtn.addEventListener('click', () => {
+  const result = game.hit();
+  if (!result) return;
+
+  pendingAction = null;
+  executeBtn.disabled = true;
+
+  renderHands();
+
+  if (result.bust) {
+    finishHand(game.resolveHand());
+  } else {
+    updateMatrixHighlight();
+  }
+});
+
+// ─── Stand ────────────────────────────────────────
+standBtn.addEventListener('click', () => {
+  game.stand();
+  renderHands();
+  finishHand(game.resolveHand());
+});
+
+// ─── Get AI Rec ───────────────────────────────────
+aiRecBtn.addEventListener('click', async () => {
+  if (!getApiKey()) {
+    aiContentEl.innerHTML = '<span class="ai-err">No API key loaded. Upload a .env file with OPENAI_API_KEY.</span>';
+    return;
+  }
+
+  aiRecBtn.disabled   = true;
+  executeBtn.disabled = true;
+
+  let dots = 0;
+  const loading = ['Analyzing.', 'Analyzing..', 'Analyzing...'];
+  aiContentEl.innerHTML = `<div class="ai-loading">Analyzing.</div>`;
+  loadingTimer = setInterval(() => {
+    dots = (dots + 1) % 3;
+    const el = aiContentEl.querySelector('.ai-loading');
+    if (el) el.textContent = loading[dots];
+  }, 350);
+
+  const pi          = getHandInfo(game.playerHand);
+  const dealerUpCard = game.dealerHand[0];
+  const riskVal     = parseInt(riskSlider.value);
+  const riskProfile = ['conservative', 'balanced', 'aggressive'][riskVal];
+
+  // Snapshot basic strategy at this exact state for analytics
+  const bsRaw = getBasicStrategyAction(pi.total, pi.isSoft, dealerUpCard.rank);
+  lastAiBsAction = bsRaw === 'S' ? 'stand' : 'hit';
+
+  const gameState = {
+    playerHand: game.playerHand,
+    dealerUpCard,
+    playerTotal: pi.total,
+    isSoft:      pi.isSoft,
+    riskProfile,
+    model:       modelSelect.value,
+  };
+
+  try {
+    const resp = await callBlackjackAgent(gameState);
+    clearInterval(loadingTimer);
+    lastAiResponse = resp;
+    lastAiRec      = resp.action;
+    pendingAction  = resp.action;
+    renderAiContent(resp);
+    executeBtn.disabled = false;
+    aiRecBtn.disabled   = false;
+  } catch (err) {
+    clearInterval(loadingTimer);
+    aiContentEl.innerHTML = `<span class="ai-err">${esc(err.message)}</span>`;
+    aiRecBtn.disabled     = false;
+  }
+});
+
+// ─── Execute Rec ──────────────────────────────────
+executeBtn.addEventListener('click', () => {
+  if (!pendingAction) return;
+  const action = pendingAction;
+  pendingAction       = null;
+  executeBtn.disabled = true;
+  if (action === 'hit') hitBtn.click();
+  else standBtn.click();
+});
+
+// ─── Explainability level change ──────────────────
+document.querySelectorAll('input[name="explain"]').forEach(r => {
+  r.addEventListener('change', () => { if (lastAiResponse) renderAiContent(lastAiResponse); });
+});
+
+// ─── Finish hand ──────────────────────────────────
+function finishHand(outcome) {
+  clearInterval(loadingTimer);
+  setActionBtns(false);
+  executeBtn.disabled = true;
+  dealBtn.disabled    = false;
+  clearMatrixHighlight();
+
+  const msgs = {
+    blackjack: 'Blackjack! You win!',
+    win:       'You win!',
+    loss:      outcome.playerTotal > 21 ? 'Bust — dealer wins.' : 'Dealer wins.',
+    bust:      'Bust — dealer wins.',
+    push:      "Push — it's a tie.",
+  };
+
+  const r = outcome.result;
+  showMsg(msgs[r] || r, r);
+  updateBalance();
+
+  recordHand({
+    result:              r,
+    payout:              outcome.payout,
+    balance:             game.balance,
+    aiRecommendation:    lastAiRec,
+    basicStrategyAction: lastAiBsAction,
+  });
+  updateStatsDisplay();
+  drawBankrollChart();
+}
+
+// ─── Init ─────────────────────────────────────────
+game.init();
+updateBalance();
+renderStrategyMatrix('matrix-wrap');
+drawBankrollChart();
+</script>
+</body>
+</html>
